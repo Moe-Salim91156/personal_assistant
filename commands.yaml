@@ -1,0 +1,4 @@
+say hello:
+  script: scripts/hello.py
+  args: ["{name}"]
+
