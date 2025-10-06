@@ -9,3 +9,11 @@ clean:
 cleaner:
   script: scripts/bash/cleaner.sh
   args: ["{something}"]
+
+push:
+  script: scripts/bash/push.sh
+
+todo:
+  script: scripts/bash/todo_finder.sh
+
+
