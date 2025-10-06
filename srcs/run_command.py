@@ -6,6 +6,11 @@ def run_command(commands, cmd_key, args_text):
     
     args_list = args_text.split() if args_text else []
 
+    if " " in cmd_key:
+        parts = cmd_key.split()
+        subcommand = " ".join(parts[1:])  # Everything after first word
+        args_list = [subcommand] + args_list
+
     if script_path.endswith(".py"):
         result = subprocess.run(
             ["python3", script_path] + args_list,

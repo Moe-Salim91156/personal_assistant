@@ -18,3 +18,13 @@ todo:
 
 ch_forb:
   script : scripts/bash/check_forbidden.sh
+
+ref:
+  script: scripts/python/ref.py
+
+ref list:
+  script: scripts/python/ref.py
+
+ref search:
+  script: scripts/python/ref.py
+  args: ["--search", "{query}"]
