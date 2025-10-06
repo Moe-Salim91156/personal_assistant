@@ -16,4 +16,5 @@ push:
 todo:
   script: scripts/bash/todo_finder.sh
 
-
+ch_forb:
+  script : scripts/bash/check_forbidden.sh
