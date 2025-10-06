@@ -12,10 +12,7 @@ def run_command(commands, cmd_key, args_text):
         )
     elif script_path.endswith(".sh"):
         result = subprocess.run(
-            ["bash", script_path] + args_text.split(),
-            capture_output=True,
-            text=True
-        )
+            ["bash", script_path] + args_text.split())
     else:
         print(f"Unsupported script type for command '{cmd_key}'")
         return
