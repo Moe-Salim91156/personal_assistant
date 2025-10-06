@@ -1,9 +1,7 @@
 #!/bin/bash
 
-TARGET_DIR="$1" || TARGET_DIR="$HOME"
-
+TARGET_DIR="${1:-$HOME}"
 echo "REMOVING ~/.cache folder"
-rm -rf $HOME/.cache
 
 if [ -z "$TARGET_DIR" ]; then
   echo "Usage: $0 /path/to/folder"
