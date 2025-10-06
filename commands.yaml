@@ -1,4 +1,7 @@
 say hello:
-  script: scripts/hello.py
+  script: scripts/python/hello.py
   args: ["{name}"]
 
+test:
+  script: scripts/bash/test.sh
+  args: []
