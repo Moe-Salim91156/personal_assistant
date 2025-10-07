@@ -28,3 +28,10 @@ ref list:
 ref search:
   script: scripts/python/ref.py
   args: ["--search", "{query}"]
+
+Deploy:
+  script: scripts/bash/Deploy.sh
+
+pypy:
+  script: scripts/python/Deploy.py
+
