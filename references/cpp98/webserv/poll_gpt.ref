@@ -1,0 +1,80 @@
+=== LANGUAGE: POLL ===
+
+WHAT IS POLL?
+poll() is a modern **I/O multiplexing system call**, like select(), but more flexible:  
+- Uses an **array of struct pollfd** instead of fd_set  
+- No fixed limit like FD_SETSIZE  
+- Each pollfd monitors a single fd for events: **POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL**  
+- Ideal for Webserv to efficiently handle hundreds/thousands of clients  
+
+HEADER/IMPORT:
+#include <poll.h>
+#include <unistd.h>
+#include <vector>
+#include <iostream>
+#include <errno.h>
+#include <fcntl.h>
+
+DECLARATION/SYNTAX:
+int poll(struct pollfd *fds, nfds_t nfds, int timeout_ms);
+
+PARAMETERS:
+- fds: array of struct pollfd { int fd; short events; short revents; }  
+- nfds: number of elements in array  
+- timeout_ms: milliseconds to wait (-1 = infinite, 0 = non-blocking)  
+- returns: # of fds with events, 0 = timeout, -1 = error
+
+EVENT FLAGS:
+- POLLIN: ready to read  
+- POLLOUT: ready to write  
+- POLLERR: error  
+- POLLHUP: hang up  
+- POLLNVAL: invalid fd  
+
+BASIC EXAMPLE:
+struct pollfd fds[2];
+fds[0].fd = server_fd; fds[0].events = POLLIN;
+int ready = poll(fds,1,-1);
+if(ready>0 && (fds[0].revents & POLLIN)){
+    int client_fd = accept(server_fd,NULL,NULL);
+}
+
+ADVANCED EXAMPLE:
+std::vector<pollfd> fds;
+pollfd sfd; sfd.fd = server_fd; sfd.events = POLLIN; fds.push_back(sfd);
+
+while(true){
+    int ret = poll(fds.data(), fds.size(), -1);
+    if(ret<0){ if(errno==EINTR) continue; perror("poll"); break; }
+    for(size_t i=0;i<fds.size();i++){
+        if(fds[i].revents & POLLIN){
+            if(fds[i].fd==server_fd){
+                int c = accept(server_fd,NULL,NULL);
+                pollfd p; p.fd=c; p.events=POLLIN; fds.push_back(p);
+            }else{
+                char buf[1024]; int b = recv(fds[i].fd,buf,sizeof(buf),0);
+                if(b<=0){ close(fds[i].fd); fds.erase(fds.begin()+i); i--; }
+            }
+        }
+    }
+}
+
+42 SPECIFIC NOTES:
+- More scalable than select() for large client counts  
+- Non-blocking sockets recommended  
+- Handle POLLHUP, POLLERR, POLLNVAL to detect client disconnects  
+- Must manage pollfd vector carefully (erase+index)  
+
+GOTCHAS:
+- Must check revents, not events  
+- Erasing pollfd from vector → adjust index  
+- POLLIN triggered on disconnect (recv() returns 0)  
+- EINTR must be handled  
+
+CPP98 CONSTRAINTS:
+- No auto, no range-based for  
+- Manual loops for vector/pollfd arrays
+
+RELATED:
+Sockets, fcntl, select, POLLIN, POLLOUT, SIGPIPE, errno
+
