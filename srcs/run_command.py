@@ -18,7 +18,6 @@ def run_command(commands, cmd_key, args_text):
         if 'ref.py' in script_path:
             result = subprocess.run(
                 ["python3", script_path] + args_list,
-                text=True
             )
             if result.returncode != 0:
                 print(f"\033[93m⚠️  Script exited with code {result.returncode}\033[0m")

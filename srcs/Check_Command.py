@@ -7,7 +7,6 @@ def check_command(text):
         if text.startswith(key):
             args = text[len(key):].strip()
             return key, args, commands
-
     return None, None, None
 
 
