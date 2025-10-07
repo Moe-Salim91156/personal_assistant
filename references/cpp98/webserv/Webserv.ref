@@ -1,0 +1,217 @@
+=== WEBSERV: ULTIMATE REFERENCE ===
+
+WHAT IS SOCKET?
+A socket is an endpoint for network communication. Used to connect clients and servers over TCP/UDP.
+
+HEADER/IMPORT:
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+DECLARATION/SYNTAX:
+int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+COMMON METHODS/USAGE:
+socket(), bind(), listen(), accept(), setsockopt(), close(), fcntl(), recv(), send()
+
+PARAMETERS (like man pages):
+- domain: AF_INET (IPv4)
+- type: SOCK_STREAM (TCP), SOCK_DGRAM (UDP)
+- protocol: usually 0
+- Returns: fd >=0 on success, -1 on error
+
+BASIC EXAMPLE:
+int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+if (server_fd < 0) perror("socket failed");
+
+ADVANCED EXAMPLE:
+struct sockaddr_in addr;
+addr.sin_family = AF_INET;
+addr.sin_addr.s_addr = INADDR_ANY;
+addr.sin_port = htons(8080);
+setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
+listen(server_fd, 10);
+
+42 SPECIFIC NOTES:
+- Non-blocking sockets required
+- Must handle multiple clients
+- Functions <25 lines, C++98 only
+
+GOTCHAS:
+- Always check return values
+- Use htons()/htonl()
+- recv() may read partially; loop if needed
+
+RELATED: select, poll, fcntl, recv, send
+
+---
+
+WHAT IS SELECT()?
+Monitors multiple fds for read/write/error, blocking or with timeout.
+
+HEADER/IMPORT:
+#include <sys/select.h>
+
+DECLARATION/SYNTAX:
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+
+PARAMETERS:
+- nfds: max fd +1
+- readfds/writefds/exceptfds: fd_set*
+- timeout: NULL = infinite
+- Returns: number ready, 0 timeout, -1 error
+
+BASIC EXAMPLE:
+FD_ZERO(&readfds);
+FD_SET(server_fd, &readfds);
+select(max_fd + 1, &readfds, NULL, NULL, NULL);
+
+ADVANCED EXAMPLE:
+for each client_fd:
+  if (FD_ISSET(fd, &readfds)) recv(fd,...);
+
+42 SPECIFIC NOTES:
+- Use with non-blocking sockets
+- Reset fd_set every loop
+- Track max fd when adding clients
+
+GOTCHAS:
+- Forgetting FD_ZERO each iteration
+- Incorrect max fd
+
+RELATED: poll, socket, recv, send, fcntl
+
+---
+
+WHAT IS POLL()?
+Like select(), monitors multiple fds, scalable for many clients.
+
+HEADER/IMPORT:
+#include <poll.h>
+
+DECLARATION/SYNTAX:
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
+PARAMETERS:
+- fds: array of pollfd {fd, events, revents}
+- nfds: number of fds
+- timeout: ms (-1 = infinite)
+- Returns: number ready, 0 timeout, -1 error
+
+BASIC EXAMPLE:
+struct pollfd fds[1024];
+fds[0].fd = server_fd; fds[0].events = POLLIN;
+poll(fds, 1, -1);
+
+ADVANCED EXAMPLE:
+for each fd in fds:
+  if (revents & POLLIN) recv(fd,...);
+
+42 SPECIFIC NOTES:
+- vector<pollfd> recommended for dynamic clients
+- Check revents for POLLERR/POLLHUP
+
+GOTCHAS:
+- Modifying fds while iterating
+- Ignoring disconnects
+
+RELATED: select, socket, recv, send, fcntl
+
+---
+
+WHAT IS CGI?
+CGI allows dynamic content via external scripts (Python, Bash, etc.)
+
+HEADER/IMPORT:
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+
+DECLARATION/SYNTAX:
+- fork(), execve(), pipe(), dup2()
+
+COMMON USAGE:
+- fork child
+- setup pipe for stdin/stdout
+- set env vars: REQUEST_METHOD, QUERY_STRING, CONTENT_LENGTH
+- execve() CGI script
+- parent reads stdout from pipe
+
+BASIC EXAMPLE:
+int pipefd[2]; pipe(pipefd);
+pid_t pid = fork();
+if(pid==0){
+  dup2(pipefd[1], STDOUT_FILENO);
+  execve("script.cgi", args, envp);
+} else {
+  read(pipefd[0], buf, size);
+  waitpid(pid,NULL,0);
+}
+
+ADVANCED EXAMPLE:
+- Handle POST data via stdin
+- Combine stdout output with HTTP headers
+- Loop reads/writes for large data
+
+42 SPECIFIC NOTES:
+- Functions <25 lines
+- Parse POST data
+- Close unused pipe ends
+
+GOTCHAS:
+- Missing env vars -> CGI failure
+- Deadlocks if pipes not closed
+
+RELATED: fork, execve, pipe, HTTP parsing, recv, send
+
+---
+
+WHAT IS HTTP?
+HTTP is the protocol Webserv must implement (1.1)
+
+HEADER/IMPORT:
+#include <string>
+#include <iostream>
+#include <cstring>
+
+DECLARATION/SYNTAX:
+- Request: METHOD PATH VERSION
+- Headers: key: value
+- Body: separated by empty line
+
+COMMON METHODS/USAGE:
+- Methods: GET, POST, HEAD, DELETE
+- Status codes: 200, 404, 405, 500
+- Chunked transfer, content-length
+
+BASIC EXAMPLE:
+std::string request = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n";
+
+ADVANCED EXAMPLE:
+- Parse headers into map<string,string>
+- Handle POST with CONTENT_LENGTH
+- Serve static files
+- Execute CGI dynamically
+
+42 SPECIFIC NOTES:
+- Correctly parse requests
+- Generate responses
+- Multi-client concurrency
+- Norm: <25 lines per function
+
+GOTCHAS:
+- Partial recv() requires looping
+- Malformed requests -> 400
+- Large POST: read exact content-length
+
+RELATED: sockets, select, poll, recv, send, CGI
+
+=== END OF WEBSERV.REF.TXT ===
+

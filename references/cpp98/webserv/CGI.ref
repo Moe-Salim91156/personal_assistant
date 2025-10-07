@@ -1,396 +1,133 @@
-=== CPP98: CGI (Common Gateway Interface) ===
+=== LANGUAGE: CGI (Common Gateway Interface) (CPP98 / Webserv) ===
 
-WHAT IS CGI:
-CGI allows web server to execute external programs and return their output
-as HTTP responses. Used for dynamic content (forms, scripts, etc.)
+WHAT IS CGI?
+CGI is a standard interface between web servers and external programs (scripts or binaries) that generate dynamic content.  
+- Allows Webserv to execute programs and return their output as HTTP responses.  
+- CGI programs can be written in C++, Python, Bash, or any executable language.  
+- Webserv invokes CGI with environment variables and stdin/stdout communication.  
 
-CGI ENVIRONMENT VARIABLES:
-REQUEST_METHOD   - GET, POST, etc.
-QUERY_STRING     - Data after ? in URL
-CONTENT_LENGTH   - Size of POST data
-CONTENT_TYPE     - MIME type of POST data
-SCRIPT_NAME      - Path to CGI script
-PATH_INFO        - Extra path after script name
-SERVER_NAME      - Server hostname
-SERVER_PORT      - Server port
-HTTP_*           - All HTTP headers (HTTP_HOST, HTTP_USER_AGENT, etc.)
+KEY CONCEPTS:
+- Environment variables: pass request info to CGI
+    - REQUEST_METHOD: GET, POST, etc.
+    - QUERY_STRING: data after `?` in URL
+    - CONTENT_LENGTH: size of POST body
+    - CONTENT_TYPE: MIME type
+    - SCRIPT_NAME, PATH_INFO, SERVER_NAME, SERVER_PORT
+- Standard I/O:
+    - stdin: CGI reads POST body
+    - stdout: CGI writes HTTP response (headers + body)
+- Security: restrict which scripts can execute
+- In Webserv, CGI is usually forked per request, output captured via pipe  
 
-CGI SCRIPT EXECUTION:
-1. Server receives request for CGI script
-2. Server sets environment variables
-3. Server executes script
-4. Script reads stdin (for POST data)
-5. Script writes to stdout (headers + body)
-6. Server sends output to client
+---
 
-BASIC CGI EXECUTION:
-std::string executeCgi(const std::string& script_path, 
-                       const HttpRequest& request) {
-    int pipe_in[2];  // For sending data to CGI
-    int pipe_out[2]; // For receiving data from CGI
-    
-    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {
-        perror("pipe");
-        return "";
-    }
-    
-    pid_t pid = fork();
-    
-    if (pid < 0) {
-        perror("fork");
-        return "";
-    }
-    
-    if (pid == 0) {
-        // Child process - execute CGI
-        
-        // Redirect stdin/stdout
-        dup2(pipe_in[0], STDIN_FILENO);
-        dup2(pipe_out[1], STDOUT_FILENO);
-        
-        // Close unused pipe ends
-        close(pipe_in[0]);
-        close(pipe_in[1]);
-        close(pipe_out[0]);
-        close(pipe_out[1]);
-        
-        // Set environment variables
-        setenv("REQUEST_METHOD", request.getMethod().c_str(), 1);
-        setenv("QUERY_STRING", request.getQueryString().c_str(), 1);
-        // ... set other env vars
-        
-        // Execute script
-        char* argv[] = {NULL};
-        execve(script_path.c_str(), argv, environ);
-        
-        // If execve fails
-        perror("execve");
-        exit(1);
-    }
-    
-    // Parent process
-    close(pipe_in[0]);
-    close(pipe_out[1]);
-    
-    // Send POST data to CGI stdin
-    if (request.getMethod() == "POST") {
-        std::string body = request.getBody();
-        write(pipe_in[1], body.c_str(), body.size());
-    }
-    close(pipe_in[1]);
-    
-    // Read CGI output
-    std::string output;
-    char buffer[4096];
-    int bytes;
-    
-    while ((bytes = read(pipe_out[0], buffer, sizeof(buffer))) > 0) {
-        output.append(buffer, bytes);
-    }
-    close(pipe_out[0]);
-    
-    // Wait for child to finish
-    int status;
+HEADERS / IMPORTS:
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <cstring>
+#include <cerrno>
+#include <iostream>
+#include <cstdlib>
+
+---
+
+DECLARATION / SYNTAX:
+pid_t pid = fork();
+if (pid == 0) {
+    // child process: execute CGI
+    execve(script_path, argv, envp);
+    perror("execve failed");
+    exit(EXIT_FAILURE);
+} else if (pid > 0) {
+    // parent process: read output via pipe
     waitpid(pid, &status, 0);
-    
-    return output;
+} else {
+    // fork failed
+    perror("fork failed");
 }
 
-COMPLETE CGI HANDLER:
-class CgiHandler {
-private:
-    std::string script_path;
-    HttpRequest request;
-    
-public:
-    CgiHandler(const std::string& path, const HttpRequest& req) 
-        : script_path(path), request(req) {}
-    
-    std::string execute() {
-        int pipe_in[2], pipe_out[2];
-        
-        if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) {
-            return buildErrorResponse(500, "Pipe creation failed");
-        }
-        
-        pid_t pid = fork();
-        
-        if (pid < 0) {
-            return buildErrorResponse(500, "Fork failed");
-        }
-        
-        if (pid == 0) {
-            // Child process
-            setupChildProcess(pipe_in, pipe_out);
-            executeScript();
-            exit(1); // Should not reach here
-        }
-        
-        // Parent process
-        return handleParentProcess(pid, pipe_in, pipe_out);
-    }
-    
-private:
-    void setupChildProcess(int pipe_in[2], int pipe_out[2]) {
-        // Redirect I/O
-        dup2(pipe_in[0], STDIN_FILENO);
-        dup2(pipe_out[1], STDOUT_FILENO);
-        dup2(pipe_out[1], STDERR_FILENO);
-        
-        // Close all pipe ends
-        close(pipe_in[0]);
-        close(pipe_in[1]);
-        close(pipe_out[0]);
-        close(pipe_out[1]);
-        
-        // Set environment
-        setEnvironment();
-    }
-    
-    void setEnvironment() {
-        setenv("REQUEST_METHOD", request.getMethod().c_str(), 1);
-        setenv("SCRIPT_NAME", script_path.c_str(), 1);
-        setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
-        setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
-        
-        if (request.getMethod() == "GET") {
-            setenv("QUERY_STRING", request.getQueryString().c_str(), 1);
-        }
-        
-        if (request.getMethod() == "POST") {
-            std::ostringstream oss;
-            oss << request.getBody().size();
-            setenv("CONTENT_LENGTH", oss.str().c_str(), 1);
-            setenv("CONTENT_TYPE", 
-                   request.getHeader("Content-Type").c_str(), 1);
-        }
-        
-        // Set HTTP headers as environment variables
-        std::map<std::string, std::string> headers = request.getHeaders();
-        std::map<std::string, std::string>::iterator it;
-        for (it = headers.begin(); it != headers.end(); ++it) {
-            std::string env_name = "HTTP_" + toUpper(it->first);
-            setenv(env_name.c_str(), it->second.c_str(), 1);
-        }
-    }
-    
-    void executeScript() {
-        // Determine interpreter
-        std::string interpreter = getInterpreter(script_path);
-        
-        if (!interpreter.empty()) {
-            char* argv[] = {
-                const_cast<char*>(interpreter.c_str()),
-                const_cast<char*>(script_path.c_str()),
-                NULL
-            };
-            execve(interpreter.c_str(), argv, environ);
-        } else {
-            char* argv[] = {
-                const_cast<char*>(script_path.c_str()),
-                NULL
-            };
-            execve(script_path.c_str(), argv, environ);
-        }
-        
-        perror("execve");
-    }
-    
-    std::string handleParentProcess(pid_t pid, int pipe_in[2], int pipe_out[2]) {
-        close(pipe_in[0]);
-        close(pipe_out[1]);
-        
-        // Write POST data to CGI stdin
-        if (request.getMethod() == "POST") {
-            std::string body = request.getBody();
-            write(pipe_in[1], body.c_str(), body.size());
-        }
-        close(pipe_in[1]);
-        
-        // Read CGI output with timeout
-        std::string output = readWithTimeout(pipe_out[0], 5); // 5 sec timeout
-        close(pipe_out[0]);
-        
-        // Wait for child
-        int status;
-        if (waitpid(pid, &status, 0) < 0) {
-            return buildErrorResponse(500, "CGI execution failed");
-        }
-        
-        if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-            return buildErrorResponse(500, "CGI script error");
-        }
-        
-        return processCgiOutput(output);
-    }
-    
-    std::string getInterpreter(const std::string& path) {
-        if (path.find(".py") != std::string::npos)
-            return "/usr/bin/python3";
-        if (path.find(".php") != std::string::npos)
-            return "/usr/bin/php";
-        if (path.find(".pl") != std::string::npos)
-            return "/usr/bin/perl";
-        return ""; // Assume executable
-    }
-};
+---
 
-EXAMPLE CGI SCRIPT (Python):
-#!/usr/bin/python3
-import os
-import sys
+PARAMETERS / DETAILS:
 
-# Read POST data
-if os.environ.get('REQUEST_METHOD') == 'POST':
-    content_length = int(os.environ.get('CONTENT_LENGTH', 0))
-    post_data = sys.stdin.read(content_length)
-else:
-    post_data = ""
+fork():
+- Returns 0 in child process, PID of child in parent, -1 on error
 
-# Output headers
-print("Content-Type: text/html")
-print()  # Empty line separates headers from body
+execve():
+- script_path: path to CGI executable
+- argv: argument array (argv[0] = program name, argv[n] = NULL)
+- envp: environment variables array (key=value, NULL-terminated)
+- Replaces current process image with new program
 
-# Output body
-print("<html>")
-print("<body>")
-print("<h1>CGI Script Output</h1>")
-print(f"<p>Method: {os.environ.get('REQUEST_METHOD')}</p>")
-print(f"<p>Query: {os.environ.get('QUERY_STRING')}</p>")
-print(f"<p>POST data: {post_data}</p>")
-print("</body>")
-print("</html>")
+Environment variables:
+- REQUEST_METHOD: GET / POST / etc.
+- QUERY_STRING: for GET data
+- CONTENT_LENGTH: bytes to read from stdin (POST)
+- CONTENT_TYPE: MIME type of body
+- SCRIPT_NAME, PATH_INFO, SERVER_NAME, SERVER_PORT: server info
 
-CGI OUTPUT PARSING:
-std::string processCgiOutput(const std::string& output) {
-    // CGI output format:
-    // Header1: value1\n
-    // Header2: value2\n
-    // \n
-    // body content
-    
-    size_t header_end = output.find("\n\n");
-    if (header_end == std::string::npos)
-        header_end = output.find("\r\n\r\n");
-    
-    HttpResponse response;
-    response.setStatus(200);
-    
-    if (header_end != std::string::npos) {
-        std::string headers = output.substr(0, header_end);
-        std::string body = output.substr(header_end + 2);
-        
-        // Parse CGI headers
-        std::istringstream stream(headers);
-        std::string line;
-        
-        while (std::getline(stream, line)) {
-            size_t colon = line.find(':');
-            if (colon != std::string::npos) {
-                std::string key = line.substr(0, colon);
-                std::string value = line.substr(colon + 2);
-                
-                if (key == "Status") {
-                    int code = atoi(value.c_str());
-                    response.setStatus(code);
-                } else {
-                    response.setHeader(key, value);
-                }
-            }
-        }
-        
-        response.setBody(body);
-    } else {
-        response.setBody(output);
-    }
-    
-    return response.build();
+Stdin / stdout with CGI:
+- Parent writes POST body to pipe → child reads stdin
+- Child writes headers + body → parent reads stdout for response
+
+---
+
+BASIC EXAMPLE:
+int pipe_fd[2];
+pipe(pipe_fd);
+pid_t pid = fork();
+if (pid == 0) {
+    dup2(pipe_fd[1], STDOUT_FILENO);
+    close(pipe_fd[0]);
+    close(pipe_fd[1]);
+    char *argv[] = {"/path/to/cgi_script", NULL};
+    char *envp[] = {"REQUEST_METHOD=GET", NULL};
+    execve(argv[0], argv, envp);
+    perror("execve failed");
+    exit(EXIT_FAILURE);
+} else {
+    close(pipe_fd[1]);
+    char buffer[1024];
+    int n = read(pipe_fd[0], buffer, sizeof(buffer));
+    std::cout << std::string(buffer, n);
+    waitpid(pid, NULL, 0);
 }
 
-TIMEOUT HANDLING:
-std::string readWithTimeout(int fd, int timeout_sec) {
-    std::string result;
-    char buffer[4096];
-    
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN;
-    
-    time_t start = time(NULL);
-    
-    while (time(NULL) - start < timeout_sec) {
-        int ret = poll(&pfd, 1, 1000); // 1 second poll timeout
-        
-        if (ret > 0 && (pfd.revents & POLLIN)) {
-            int bytes = read(fd, buffer, sizeof(buffer));
-            if (bytes <= 0)
-                break;
-            result.append(buffer, bytes);
-        } else if (ret < 0) {
-            break;
-        }
-    }
-    
-    return result;
-}
+---
 
-FILE UPLOAD HANDLING (CGI):
-# CGI script to handle file upload
-#!/usr/bin/python3
-import os
-import sys
+ADVANCED CONSIDERATIONS:
+- Must handle POST data: read CONTENT_LENGTH bytes from stdin
+- Capture both stdout and stderr for debugging CGI
+- Handle timeouts to avoid blocking server on slow CGI
+- Sanitize input to prevent command injection
+- Consider caching frequent CGI results for performance
 
-content_length = int(os.environ.get('CONTENT_LENGTH', 0))
-data = sys.stdin.buffer.read(content_length)
-
-# Parse multipart/form-data
-# (simplified - real implementation needs proper parsing)
-
-print("Content-Type: text/html")
-print()
-print("<html><body>")
-print(f"<p>Received {len(data)} bytes</p>")
-print("</body></html>")
-
-42 WEBSERV REQUIREMENTS:
-- Execute CGI scripts for specific file types (.py, .php, etc.)
-- Set proper environment variables
-- Handle GET and POST methods
-- Support query strings
-- Handle POST body correctly
-- Implement timeouts (kill stuck CGI processes)
-- Parse CGI output correctly
-- Handle CGI errors gracefully
-
-SECURITY CONSIDERATIONS:
-- Validate script path (prevent directory traversal)
-- Set proper permissions on CGI directory
-- Limit execution time
-- Sanitize environment variables
-- Check script exists and is executable
-- Don't expose error details to client
+---
 
 GOTCHAS:
-- CGI uses \n for headers (not \r\n like HTTP)
-- Remember to close unused pipe ends
-- waitpid() prevents zombie processes
-- POST data goes to stdin, not environment
-- Query string always in QUERY_STRING (even for POST)
-- CGI timeout can leave zombie processes
+- Forgetting to set environment variables → script fails
+- Not closing unused pipe ends → deadlock
+- Partial reads/writes: always loop until done
+- Overwriting stdout/stderr incorrectly → output lost
+- Ignoring fork()/execve() errors → server crashes
 
-COMMON CGI ERRORS:
-500 Internal Server Error - Script crashed or didn't execute
-502 Bad Gateway - Script output invalid
-504 Gateway Timeout - Script took too long
+---
 
-TESTING CGI:
-# Test script directly:
-export REQUEST_METHOD=GET
-export QUERY_STRING="name=test"
-./script.py
+42 SPECIFIC NOTES:
+- Must fork for each request
+- Keep functions <25 lines (norm compliance)
+- Parse stdin for POST requests correctly
+- Combine CGI output with HTTP headers properly
+- Handle disconnects, large payloads, and errors gracefully
 
-# Test with webserv:
-curl -X POST -d "name=value" http://localhost:8080/cgi-bin/script.py
+---
 
-RELATED:
-fork, execve, pipe, dup2, waitpid, environment variables, HTTP response
+CPP98 CONSTRAINTS:
+- No auto keyword or range-based loops
+- Use arrays or std::vector for arguments/environment
+- Manual memory management if needed
+- Use only CPP98-compatible system calls
+

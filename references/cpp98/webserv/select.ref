@@ -1,0 +1,131 @@
+=== LANGUAGE: select() (CPP98 / Webserv) ===
+
+WHAT IS SELECT()?
+select() is a **system call for monitoring multiple file descriptors** to see if I/O is possible.  
+- Can check **read, write, and exception** conditions.  
+- Often used in Webserv to handle multiple clients on the same server socket.  
+- Works with sockets, pipes, terminals, etc.  
+
+KEY CONCEPTS:
+- fd_set: set of file descriptors
+    - FD_ZERO(&set): clear set
+    - FD_SET(fd, &set): add fd
+    - FD_CLR(fd, &set): remove fd
+    - FD_ISSET(fd, &set): check if fd is ready
+- Timeout: timeval struct (seconds + microseconds)
+- Returns number of ready fds, 0 if timeout, -1 on error
+
+---
+
+HEADERS / IMPORTS:
+#include <sys/select.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <cerrno>
+#include <iostream>
+#include <vector>
+#include <cstring>
+
+---
+
+DECLARATION / SYNTAX:
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+
+---
+
+PARAMETERS / DETAILS:
+
+select():
+- nfds: highest-numbered fd + 1
+- readfds: fds to check for readability
+- writefds: fds to check for writability
+- exceptfds: fds to check for exceptional conditions
+- timeout: pointer to timeval struct
+    - tv_sec: seconds
+    - tv_usec: microseconds
+    - NULL = wait indefinitely
+- Returns: number of fds ready, 0 if timeout, -1 on error
+
+recv()/send() (common with select):
+- buf: buffer pointer
+- len: buffer length
+- flags: usually 0
+- Returns: bytes read/written, 0 on disconnect, -1 on error
+
+---
+
+BASIC EXAMPLE:
+fd_set read_fds;
+FD_ZERO(&read_fds);
+FD_SET(server_fd, &read_fds);
+int max_fd = server_fd;
+
+struct timeval tv;
+tv.tv_sec = 5;  // wait 5 seconds
+tv.tv_usec = 0;
+
+int activity = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
+if (activity > 0) {
+    if (FD_ISSET(server_fd, &read_fds)) {
+        int client_fd = accept(server_fd, NULL, NULL);
+        FD_SET(client_fd, &read_fds);
+        if (client_fd > max_fd) max_fd = client_fd;
+    }
+    
+    // Check existing clients
+    for (int fd = 0; fd <= max_fd; fd++) {
+        if (FD_ISSET(fd, &read_fds) && fd != server_fd) {
+            char buffer[1024];
+            int bytes = recv(fd, buffer, sizeof(buffer), 0);
+            if (bytes <= 0) {
+                close(fd);
+                FD_CLR(fd, &read_fds);
+            } else {
+                std::cout << "Received: " << std::string(buffer, bytes) << std::endl;
+            }
+        }
+    }
+}
+
+---
+
+ADVANCED / MULTI-CLIENT CONSIDERATIONS:
+- Combine select() with **non-blocking sockets** for scalable servers
+- Always update **max_fd** and **fd_set** after adding/removing clients
+- Handle **disconnects and errors** properly (recv() = 0, errno)
+- Can monitor multiple types of fds (TCP, UDP, stdin, pipes)
+- Must reinitialize fd_sets before each select() call
+
+---
+
+GOTCHAS:
+- Forgetting to reset fd_sets before each select() → incorrect behavior
+- Using blocking sockets → select() may indicate ready, but recv() blocks
+- Not handling EINTR → system call interrupted by signals
+- Timeout 0 → busy loop; timeout NULL → blocks indefinitely
+- Removing clients: remember to FD_CLR(fd, &read_fds)
+
+---
+
+42 SPECIFIC NOTES:
+- Must handle multiple clients efficiently
+- Keep functions <25 lines (norm compliance)
+- Manual HTTP parsing after recv()
+- Handle disconnects and partial reads gracefully
+
+---
+
+CPP98 CONSTRAINTS:
+- No auto or range-based for loops
+- Use explicit loops for iterating fd sets
+- Use arrays or std::vector for storing client fds
+- No fancy C++11+ features
+
+---
+
+RELATED CONCEPTS:
+- poll()
+- recv()/send()
+- Sockets and non-blocking I/O
+- HTTP parsing and Webserv concurrency
+

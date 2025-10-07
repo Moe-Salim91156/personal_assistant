@@ -1,75 +1,82 @@
 === LANGUAGE: HTTP (Requests & Responses) ===
 
 WHAT IS HTTP?
-HTTP (HyperText Transfer Protocol) is the protocol used for client-server communication on the web.
-Webserv must handle HTTP/1.1 requests and responses for multiple clients simultaneously.
-Key points:
-- Stateless: each request is independent.
-- Request → Response: client sends request, server parses it, responds.
-- Headers: key-value metadata about the request/response.
-- Body: optional data payload (POST, PUT).
-- Persistent connections: "Connection: keep-alive" allows multiple requests per TCP session.
+HTTP (HyperText Transfer Protocol) is the foundation of client-server communication on the web.
+- Clients (browsers, curl) send requests; servers respond with responses.
+- Stateless: each request is independent; no session data is retained unless implemented via cookies.
+- Webserv must handle HTTP/1.1, including:
+    - Multiple clients
+    - Parsing requests
+    - Generating valid responses
+    - Handling persistent connections
+
+KEY CONCEPTS:
+- Request-Line: <METHOD> <URI> HTTP/<VERSION>
+- Headers: metadata (Host, Content-Length, Connection)
+- Body: optional, usually for POST/PUT
+- Status codes: 200, 404, 500, etc.
+- Persistent connections: "Connection: keep-alive" vs "close"
 
 ---
 
-HTTP REQUESTS
+HEADERS / IMPORTS:
+#include <string>
+#include <map>
+#include <sstream>
+#include <iostream>
 
-STRUCTURE:
-<Request-Line>\r\n
-Header-Name: Header-Value\r\n
-...
-\r\n
-[Optional body]
+---
 
-<Request-Line> = <METHOD> <URI> HTTP/<VERSION>
+DECLARATION / SYNTAX:
+struct HttpRequest {
+    std::string method;
+    std::string uri;
+    std::string version;
+    std::map<std::string, std::string> headers;
+    std::string body;
+};
 
-COMMON METHODS:
-- GET    → retrieve a resource, no body
-- POST   → submit data to server, body included
-- DELETE → remove resource
-- HEAD   → like GET, no body
-- Optional: PUT, PATCH, OPTIONS
+struct HttpResponse {
+    std::string version;
+    int status_code;
+    std::string reason;
+    std::map<std::string, std::string> headers;
+    std::string body;
+};
 
-PARAMETERS & MEANING:
-- Method → action client wants (GET, POST…)
-- URI → resource path (/index.html)
-- Version → HTTP/1.0, HTTP/1.1
-- Headers → metadata (Host, Content-Length, Connection…)
-- Body → optional data for POST/PUT
+---
 
-BASIC PARSING EXAMPLE:
+PARAMETERS / DETAILS:
+HTTP Request:
+- method: GET, POST, DELETE, HEAD
+- uri: resource path (/index.html)
+- version: HTTP/1.1
+- headers: key-value pairs (case-insensitive)
+- body: optional, used with POST/PUT
+
+HTTP Response:
+- version: HTTP version
+- status_code: numeric code (200, 404…)
+- reason: textual explanation ("OK", "Not Found")
+- headers: key-value metadata
+- body: content sent to client
+
+---
+
+BASIC REQUEST PARSING EXAMPLE:
 std::string raw = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n";
 std::istringstream stream(raw);
 HttpRequest req;
 stream >> req.method >> req.uri >> req.version;
 
 std::string line;
-while(std::getline(stream, line) && line != "\r") {
+while (std::getline(stream, line) && line != "\r") {
     size_t sep = line.find(":");
-    if(sep != std::string::npos)
+    if (sep != std::string::npos)
         req.headers[line.substr(0, sep)] = line.substr(sep + 2, line.size() - sep - 3);
 }
 
----
-
-HTTP RESPONSES
-
-STRUCTURE:
-HTTP/<VERSION> <STATUS_CODE> <REASON_PHRASE>\r\n
-Header-Name: Header-Value\r\n
-...
-\r\n
-[Body]
-
-COMMON STATUS CODES:
-- 200 OK → success
-- 201 Created → resource created (POST)
-- 400 Bad Request → malformed request
-- 404 Not Found → resource missing
-- 405 Method Not Allowed → unsupported method
-- 500 Internal Server Error → server error
-
-BASIC RESPONSE EXAMPLE:
+BASIC RESPONSE BUILD EXAMPLE:
 HttpResponse res;
 res.version = "HTTP/1.1";
 res.status_code = 200;
@@ -88,51 +95,47 @@ std::string response_str = out.str();
 
 ---
 
-ADVANCED CONSIDERATIONS
-
-- Persistent connections: handle "Connection: keep-alive" vs "close".
-- Partial reads: POST body may arrive in multiple TCP packets → buffer until complete.
-- Chunked encoding: optional in 42, used for streaming large bodies.
-- Header parsing: case-insensitive keys, trim spaces.
-- Content-Length: must match body size or client hangs.
-- Multiple clients: combine with select() or poll() for concurrency.
-
----
-
-GOTCHAS
-
-- Forgetting \r\n → malformed request/response.
-- Content-Length mismatch → client hangs.
-- POST body split across multiple recv() calls → must loop.
-- Headers can arrive in multiple TCP packets → accumulate buffer.
-- Connection may close unexpectedly → handle gracefully.
+ADVANCED CONSIDERATIONS:
+- Persistent connections: handle "Connection: keep-alive" vs "close"
+- Partial reads: POST body may arrive in multiple TCP packets; buffer until complete
+- Chunked encoding: optional for large responses
+- Header parsing: case-insensitive keys, trim whitespaces
+- Content-Length: must match body size or client may hang
+- Multiple clients: combine with select() or poll() for concurrency
+- Request validation: reject invalid methods, malformed lines
 
 ---
 
-42 SPECIFIC NOTES
-
-- Support GET, POST, DELETE at minimum.
-- Use manual parsing; no external libraries.
-- Split functions <25 lines for norm compliance.
-- Properly handle multiple clients concurrently.
-- Return correct status codes (404, 400, 500).
-- Optional: implement chunked transfer for POST/large responses.
-- Must handle persistent connections correctly.
+GOTCHAS:
+- Missing \r\n → malformed request/response
+- Content-Length mismatch → client hangs
+- POST body split across multiple recv() calls → loop until complete
+- Header names case-insensitive → normalize before lookup
+- Connection may close unexpectedly → handle gracefully
 
 ---
 
-CPP98 CONSTRAINTS
-
-- Use std::map for headers, not unordered_map.
-- Manual loops; no auto or range-based for.
-- No std::string_view; use substr() for string slices.
+42 SPECIFIC NOTES:
+- Support GET, POST, DELETE at minimum
+- Manual parsing required; no external HTTP libraries
+- Functions <25 lines (norm compliance)
+- Correct status codes: 404, 400, 500
+- Must handle multiple clients concurrently
+- Optional: implement chunked transfer for large POST/response bodies
+- Persistent connections: handle multiple requests on same TCP session
 
 ---
 
-RELATED CONCEPTS
+CPP98 CONSTRAINTS:
+- Use std::map for headers; no unordered_map
+- Manual loops; no auto or range-based for
+- No std::string_view; use substrings
 
-- Sockets, select, poll, TCP communication.
-- HTTP status codes and methods.
-- recv()/send() functions and buffer handling.
-- Webserv multi-client handling and norm compliance.
+---
+
+RELATED CONCEPTS:
+- Sockets, select, poll
+- recv()/send() functions and buffer management
+- HTTP status codes, methods, headers
+- Webserv core modules and norm compliance
 
