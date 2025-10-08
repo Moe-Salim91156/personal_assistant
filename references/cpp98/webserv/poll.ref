@@ -1,370 +1,126 @@
-=== CPP98: poll() - Better Than select() ===
+=== LANGUAGE: poll() (CPP98 / Webserv) ===
 
-HEADER:
+WHAT IS POLL()?
+poll() is a **system call for monitoring multiple file descriptors** to see if I/O is possible.  
+- More scalable than select() for many clients.  
+- Monitors sockets (or other fds) for: readable, writable, or error conditions.  
+- Used in Webserv to handle **multiple clients simultaneously** without blocking.  
+
+KEY CONCEPTS:
+- struct pollfd: describes each fd to monitor
+    - fd: file descriptor
+    - events: events to watch (POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL)
+    - revents: events that occurred
+- timeout: wait time in milliseconds (-1 = infinite, 0 = poll and return immediately)
+- Returns number of fds ready, 0 if timeout, -1 on error
+
+---
+
+HEADERS / IMPORTS:
 #include <poll.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <cerrno>
+#include <iostream>
+#include <vector>
+#include <cstring>
 
-PROTOTYPE:
+---
+
+DECLARATION / SYNTAX:
 int poll(struct pollfd *fds, nfds_t nfds, int timeout);
 
-STRUCT POLLFD:
-struct pollfd {
-    int fd;         // File descriptor
-    short events;   // Events to monitor (input)
-    short revents;  // Events that occurred (output)
-};
+---
 
-PARAMETERS:
-fds     - Array of pollfd structures
-nfds    - Number of elements in fds array
-timeout - Milliseconds to wait (-1 = infinite, 0 = return immediately)
+PARAMETERS / DETAILS:
 
-RETURN VALUE:
-> 0  - Number of fds with events
-0    - Timeout
--1   - Error (check errno)
+pollfd struct:
+- fd: file descriptor to monitor
+- events: bitmask of requested events
+    - POLLIN = data to read
+    - POLLOUT = ready to write
+    - POLLERR = error condition
+    - POLLHUP = hang up
+    - POLLNVAL = invalid fd
+- revents: bitmask set by kernel with occurred events
 
-EVENT FLAGS:
-POLLIN     - Data available to read
-POLLOUT    - Ready to write
-POLLERR    - Error condition
-POLLHUP    - Hangup (connection closed)
-POLLNVAL   - Invalid fd
+poll():
+- fds: array of pollfd structs
+- nfds: number of fds in the array
+- timeout: milliseconds to wait (-1 = infinite)
+- Returns: number of fds with events, 0 on timeout, -1 on error
 
-BASIC PATTERN:
-std::vector<struct pollfd> poll_fds;
+recv()/send() (common with poll):
+- buf: buffer pointer
+- len: buffer length
+- flags: usually 0
+- Returns: bytes read/written, 0 on disconnect, -1 on error
 
-// Add server socket
-struct pollfd server_poll;
-server_poll.fd = server_fd;
-server_poll.events = POLLIN;
-poll_fds.push_back(server_poll);
+---
 
-while (true) {
-    int ret = poll(&poll_fds[0], poll_fds.size(), -1);
-    
-    if (ret < 0) {
-        perror("poll");
-        break;
-    }
-    
-    for (size_t i = 0; i < poll_fds.size(); i++) {
-        if (poll_fds[i].revents & POLLIN) {
-            // Ready to read
-        }
-    }
-}
+BASIC EXAMPLE:
+std::vector<pollfd> fds;
+pollfd server_fd;
+server_fd.fd = sockfd;
+server_fd.events = POLLIN;
+fds.push_back(server_fd);
 
-WEBSERV COMPLETE EXAMPLE:
-class Server {
-private:
-    int server_fd;
-    std::vector<struct pollfd> poll_fds;
-    std::map<int, Client> clients; // fd -> Client
-    
-public:
-    void run() {
-        // Add server socket
-        struct pollfd server_poll;
-        server_poll.fd = server_fd;
-        server_poll.events = POLLIN;
-        server_poll.revents = 0;
-        poll_fds.push_back(server_poll);
-        
-        while (true) {
-            int ret = poll(&poll_fds[0], poll_fds.size(), 5000); // 5 sec timeout
-            
-            if (ret < 0) {
-                perror("poll");
-                break;
-            }
-            
-            if (ret == 0) {
-                // Timeout - check for idle clients
-                checkTimeouts();
-                continue;
-            }
-            
-            // Check all file descriptors
-            for (size_t i = 0; i < poll_fds.size(); i++) {
-                if (poll_fds[i].revents == 0)
-                    continue; // No events
-                
-                int fd = poll_fds[i].fd;
-                
-                // Server socket - new connection
-                if (fd == server_fd && (poll_fds[i].revents & POLLIN)) {
-                    handleNewConnection();
-                    continue;
-                }
-                
-                // Client socket
-                if (poll_fds[i].revents & POLLIN) {
-                    // Data available to read
-                    if (!handleClientRead(fd)) {
-                        removeClient(fd, i);
-                        i--; // Adjust index
-                        continue;
-                    }
-                }
-                
-                if (poll_fds[i].revents & POLLOUT) {
-                    // Ready to write
-                    handleClientWrite(fd);
-                }
-                
-                if (poll_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                    // Error or hangup
-                    std::cout << "Client " << fd << " error/hangup" << std::endl;
-                    removeClient(fd, i);
-                    i--;
-                }
-            }
-        }
-    }
-    
-    void handleNewConnection() {
-        int client_fd = accept(server_fd, NULL, NULL);
-        if (client_fd < 0) {
-            perror("accept");
-            return;
-        }
-        
-        // Set non-blocking
-        int flags = fcntl(client_fd, F_GETFL, 0);
-        fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-        
-        // Add to poll array
-        struct pollfd client_poll;
-        client_poll.fd = client_fd;
-        client_poll.events = POLLIN; // Initially just monitor reads
-        client_poll.revents = 0;
-        poll_fds.push_back(client_poll);
-        
-        // Add to clients map
-        clients[client_fd] = Client(client_fd);
-        
-        std::cout << "New client: " << client_fd << std::endl;
-    }
-    
-    bool handleClientRead(int fd) {
-        char buffer[4096];
-        int bytes = recv(fd, buffer, sizeof(buffer), 0);
-        
-        if (bytes <= 0) {
-            if (bytes == 0) {
-                std::cout << "Client " << fd << " disconnected" << std::endl;
+int ready = poll(fds.data(), fds.size(), 1000); // 1 second timeout
+if (ready > 0) {
+    for (size_t i = 0; i < fds.size(); i++) {
+        if (fds[i].revents & POLLIN) {
+            char buffer[1024];
+            int bytes = recv(fds[i].fd, buffer, sizeof(buffer), 0);
+            if (bytes <= 0) {
+                // client disconnected or error
+                close(fds[i].fd);
+                fds.erase(fds.begin() + i);
+                i--;
             } else {
-                perror("recv");
+                std::cout << "Received: " << std::string(buffer, bytes) << std::endl;
             }
-            return false;
-        }
-        
-        buffer[bytes] = '\0';
-        clients[fd].appendRequest(buffer);
-        
-        // Check if request complete
-        if (clients[fd].isRequestComplete()) {
-            processRequest(fd);
-            // Enable POLLOUT to send response
-            enableWrite(fd);
-        }
-        
-        return true;
-    }
-    
-    void handleClientWrite(int fd) {
-        std::string response = clients[fd].getResponse();
-        
-        if (response.empty())
-            return;
-        
-        int sent = send(fd, response.c_str(), response.size(), 0);
-        
-        if (sent > 0) {
-            clients[fd].markBytesSent(sent);
-            
-            // If all sent, disable POLLOUT
-            if (clients[fd].allSent()) {
-                disableWrite(fd);
-            }
-        }
-    }
-    
-    void removeClient(int fd, size_t index) {
-        close(fd);
-        clients.erase(fd);
-        poll_fds.erase(poll_fds.begin() + index);
-        std::cout << "Removed client: " << fd << std::endl;
-    }
-    
-    void enableWrite(int fd) {
-        for (size_t i = 0; i < poll_fds.size(); i++) {
-            if (poll_fds[i].fd == fd) {
-                poll_fds[i].events |= POLLOUT;
-                break;
-            }
-        }
-    }
-    
-    void disableWrite(int fd) {
-        for (size_t i = 0; i < poll_fds.size(); i++) {
-            if (poll_fds[i].fd == fd) {
-                poll_fds[i].events &= ~POLLOUT;
-                break;
-            }
-        }
-    }
-    
-    void checkTimeouts() {
-        time_t now = time(NULL);
-        std::vector<int> to_remove;
-        
-        std::map<int, Client>::iterator it;
-        for (it = clients.begin(); it != clients.end(); ++it) {
-            if (now - it->second.getLastActivity() > 30) {
-                to_remove.push_back(it->first);
-            }
-        }
-        
-        for (size_t i = 0; i < to_remove.size(); i++) {
-            int fd = to_remove[i];
-            for (size_t j = 0; j < poll_fds.size(); j++) {
-                if (poll_fds[j].fd == fd) {
-                    removeClient(fd, j);
-                    break;
-                }
-            }
-        }
-    }
-};
-
-DYNAMIC EVENTS:
-// Start monitoring writes only when you have data to send
-struct pollfd pfd;
-pfd.fd = client_fd;
-pfd.events = POLLIN; // Just reads initially
-
-// Later, when response is ready:
-pfd.events = POLLIN | POLLOUT; // Monitor both
-
-// After sending complete:
-pfd.events = POLLIN; // Back to just reads
-
-POLL VS SELECT:
-ADVANTAGES:
-✅ No fd limit (select limited to FD_SETSIZE = 1024)
-✅ Cleaner API (no need to rebuild fd_set each loop)
-✅ More efficient for large number of fds
-✅ Each fd has its own event mask
-✅ Can dynamically enable/disable POLLOUT
-
-DISADVANTAGES:
-❌ Slightly more complex than select
-❌ Still O(n) like select
-
-TIMEOUT EXAMPLES:
-poll(fds, nfds, -1);    // Block forever
-poll(fds, nfds, 0);     // Return immediately (non-blocking)
-poll(fds, nfds, 1000);  // Wait 1 second
-poll(fds, nfds, 5000);  // Wait 5 seconds
-
-ERROR HANDLING:
-if (ret < 0) {
-    if (errno == EINTR) {
-        // Interrupted by signal, retry
-        continue;
-    }
-    perror("poll");
-    break;
-}
-
-// Check individual fd errors
-if (poll_fds[i].revents & POLLERR) {
-    int error;
-    socklen_t len = sizeof(error);
-    getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len);
-    std::cout << "Socket error: " << strerror(error) << std::endl;
-}
-
-REMOVING FDS:
-// When removing from middle of vector
-for (size_t i = 0; i < poll_fds.size(); i++) {
-    if (poll_fds[i].fd == fd_to_remove) {
-        poll_fds.erase(poll_fds.begin() + i);
-        break;
-    }
-}
-
-// Or swap with last and pop (faster but changes order)
-void removeFd(int fd) {
-    for (size_t i = 0; i < poll_fds.size(); i++) {
-        if (poll_fds[i].fd == fd) {
-            poll_fds[i] = poll_fds.back();
-            poll_fds.pop_back();
-            break;
         }
     }
 }
 
-42 WEBSERV TIPS:
-- Use poll instead of select (no fd limit)
-- Set non-blocking mode on all sockets
-- Only enable POLLOUT when you have data to send
-- Handle POLLHUP properly (client disconnect)
-- Implement connection timeouts
-- Use vector<pollfd> for dynamic fd management
-- Check revents before processing
+---
+
+ADVANCED CONSIDERATIONS:
+- Combine poll() with non-blocking sockets for scalable servers
+- Check revents for POLLERR, POLLHUP, POLLNVAL to handle errors
+- Dynamic vector of pollfd allows adding/removing clients at runtime
+- Always update nfds / vector after removing disconnected clients
+- Works with TCP, UDP, pipes, terminals
+
+---
 
 GOTCHAS:
-- Must check revents (not events) for results
-- POLLHUP can come with POLLIN (read remaining data first)
-- Timeout is in milliseconds (not seconds!)
-- revents is cleared by poll() each call
-- Removing fds during loop needs careful index management
-- Non-blocking sockets still required
+- Forgetting to check revents → may miss errors or hangups
+- Using blocking sockets → poll may indicate ready but recv() still blocks
+- Modifying pollfd array while iterating → iterate carefully
+- Timeout = 0 → busy loop; timeout = -1 → blocks indefinitely
 
-COMMON ERRORS:
-EINTR  - Interrupted by signal (retry)
-EINVAL - Invalid nfds or negative timeout < -1
-ENOMEM - Not enough memory
+---
 
-PERFORMANCE:
-- poll() is O(n) where n = number of fds
-- Good for <1000 connections
-- For more, consider epoll (Linux) or kqueue (BSD)
-- Better than select for large fd numbers
+42 SPECIFIC NOTES:
+- Use poll() to manage multiple clients instead of select() for large number
+- Must handle disconnects gracefully (recv() = 0)
+- Keep functions <25 lines (norm compliance)
+- Manual parsing after recv() for HTTP requests
 
-CLIENT STATE MANAGEMENT:
-enum ClientState {
-    READING_REQUEST,
-    PROCESSING_REQUEST,
-    SENDING_RESPONSE,
-    KEEP_ALIVE
-};
+---
 
-class Client {
-private:
-    int fd;
-    ClientState state;
-    time_t last_activity;
-    
-public:
-    void updatePollEvents(struct pollfd& pfd) {
-        switch (state) {
-            case READING_REQUEST:
-                pfd.events = POLLIN;
-                break;
-            case SENDING_RESPONSE:
-                pfd.events = POLLOUT;
-                break;
-            case KEEP_ALIVE:
-                pfd.events = POLLIN;
-                break;
-            default:
-                pfd.events = POLLIN;
-        }
-    }
-};
+CPP98 CONSTRAINTS:
+- No range-based for; use explicit loops
+- No auto keyword
+- Use std::vector or arrays for pollfd storage
+- Manual memory management if needed
 
-RELATED:
-select, epoll, socket, accept, recv, send, fcntl, non-blocking I/O
+---
+
+RELATED CONCEPTS:
+- select()
+- recv()/send()
+- Non-blocking sockets
+- Sockets, HTTP parsing, Webserv concurrency
+
