@@ -201,18 +201,27 @@ def show_reference(topic):
         print(colorize(f"❌ Error reading reference: {e}", Colors.BOLD, Colors.RED))
 
 def use_pager(lines):
-    """Display content using less starting from the very first line"""
+    """Display content using less with proper flags for ANSI codes"""
     import subprocess
     import shutil
     
     if shutil.which('less'):
         content = '\n'.join(lines)
         try:
-            process = subprocess.Popen(['less', '-R'], stdin=subprocess.PIPE, text=True)
+            # -R: raw control chars (for colors)
+            # -F: quit if one screen
+            # -X: don't clear screen on exit
+            # -S: chop long lines instead of wrap
+            process = subprocess.Popen(
+                ['less', '-RFX'], 
+                stdin=subprocess.PIPE, 
+                text=True
+            )
             process.communicate(input=content)
         except (BrokenPipeError, KeyboardInterrupt):
             pass
     else:
+        # Fallback: print directly
         print('\n'.join(lines))
 
 def search_references(query):
