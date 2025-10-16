@@ -134,7 +134,7 @@ def list_references():
         print(colorize(f"\n┌─ 📁 {lang_dir.name.upper()}", Colors.BOLD, Colors.CYAN))
         
         categories = {}
-        for item in lang_dir.rglob("*.ref"):
+        for item in lang_dir.rglob("*.md"):
             rel_path = item.relative_to(lang_dir)
             category = str(rel_path.parent) if str(rel_path.parent) != '.' else 'root'
             if category not in categories:
@@ -158,7 +158,7 @@ def find_reference(topic):
     if not REF_BASE.exists():
         return None
     
-    for ref_file in REF_BASE.rglob(f"{topic}.ref"):
+    for ref_file in REF_BASE.rglob(f"{topic}.md"):
         return ref_file
     
     return None
