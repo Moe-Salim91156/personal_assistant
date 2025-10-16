@@ -85,7 +85,7 @@ address.sin_port = htons(8080);
 
 ## 💡 Basic Example
 
-```cpp
+```bash
 int main() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;

@@ -91,18 +91,18 @@ struct HttpResponse {
 ## 🔧 Parameters / Details
 
 **HTTP Request:**
-- `method`: GET, POST, DELETE, HEAD
-- `uri`: resource path (/index.html)
-- `version`: HTTP/1.1
-- `headers`: key-value pairs (case-insensitive)
-- `body`: optional, used with POST/PUT
+- **method**: GET, POST, DELETE, HEAD
+- **uri**: resource path (/index.html)
+- **version**: HTTP/1.1
+- **headers**: key-value pairs (case-insensitive)
+- **body**: optional, used with POST/PUT
 
 **HTTP Response:**
-- `version`: HTTP version
-- `status_code`: numeric code (200, 404…)
-- `reason`: textual explanation ("OK", "Not Found")
-- `headers`: key-value metadata
-- `body`: content sent to client
+- **version**: HTTP version
+- **status_code**: numeric code (200, 404…)
+- **reason**: textual explanation ("OK", "Not Found")
+- **headers**: key-value metadata
+- **body**: content sent to client
 
 ## 💡 Basic Request Parsing Example
 
