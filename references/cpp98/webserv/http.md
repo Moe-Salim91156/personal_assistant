@@ -1,76 +1,76 @@
-=== HTTP.TXT: THEORY, USAGE, WEBSERV CONTEXT ===
+# HTTP Protocol - Theory, Usage, Webserv Context
 
-WHAT IS HTTP?
+## ❓ What Is HTTP?
+
 Hypertext Transfer Protocol (HTTP) is the core protocol for communication on the Web. It defines how clients (browsers) and servers exchange messages.
 
-HTTP 1.1 (used in Webserv) is stateless but supports:
+**HTTP 1.1** (used in Webserv) is stateless but supports:
+- Persistent connections (multiple requests/responses per TCP connection)
+- Chunked transfer encoding (sending response in pieces)
 
-* Persistent connections (multiple requests/responses per TCP connection)
-* Chunked transfer encoding (sending response in pieces)
+## 🔧 Theory / Deep Dive
 
----
+- HTTP messages are plain text, ASCII-encoded
 
-THEORY / DEEP DIVE:
+**Request Structure:**
+1. Request Line: `METHOD PATH VERSION` (e.g., `GET /index.html HTTP/1.1`)
+2. Headers: `key: value` pairs (Host, User-Agent, Content-Length, etc.)
+3. Empty line
+4. Optional body (mainly POST/PUT)
 
-* HTTP messages are plain text, ASCII-encoded.
-* Request Structure:
+**Response Structure:**
+1. Status Line: `VERSION STATUS_CODE REASON_PHRASE` (e.g., `HTTP/1.1 200 OK`)
+2. Headers: Content-Type, Content-Length, Connection, etc.
+3. Empty line
+4. Body: HTML, JSON, text, binary
 
-  1. Request Line: METHOD PATH VERSION (e.g., GET /index.html HTTP/1.1)
-  2. Headers: key: value pairs (Host, User-Agent, Content-Length, etc.)
-  3. Empty line
-  4. Optional body (mainly POST/PUT)
-* Response Structure:
+## 🛠️ HTTP Methods
 
-  1. Status Line: VERSION STATUS_CODE REASON_PHRASE (e.g., HTTP/1.1 200 OK)
-  2. Headers: Content-Type, Content-Length, Connection, etc.
-  3. Empty line
-  4. Body: HTML, JSON, text, binary
+- **GET**: Retrieve resource
+- **POST**: Send data to server
+- **HEAD**: Retrieve only headers
+- **DELETE**: Remove resource
+- **OPTIONS**: Query server capabilities
 
-HTTP METHODS:
+## 🛠️ Status Codes
 
-* GET: Retrieve resource
-* POST: Send data to server
-* HEAD: Retrieve only headers
-* DELETE: Remove resource
-* OPTIONS: Query server capabilities
+- **1xx**: Informational
+- **2xx**: Success (200 OK)
+- **3xx**: Redirection
+- **4xx**: Client Error (404 Not Found, 405 Method Not Allowed)
+- **5xx**: Server Error (500 Internal Server Error)
 
-STATUS CODES:
+## 🛠️ Important Headers
 
-* 1xx: Informational
-* 2xx: Success (200 OK)
-* 3xx: Redirection
-* 4xx: Client Error (404 Not Found, 405 Method Not Allowed)
-* 5xx: Server Error (500 Internal Server Error)
+- **Host**: Specifies server
+- **Content-Length**: Length of body in bytes
+- **Content-Type**: MIME type
+- **Connection**: keep-alive / close
+- **Transfer-Encoding**: chunked
 
-IMPORTANT HEADERS:
+## 🛠️ Persistent Connections
 
-* Host: Specifies server
-* Content-Length: Length of body in bytes
-* Content-Type: MIME type
-* Connection: keep-alive / close
-* Transfer-Encoding: chunked
+- Keep connection open for multiple requests/responses
+- Improves performance by avoiding TCP handshake for each request
 
-PERSISTENT CONNECTIONS:
+## 🛠️ Chunked Transfer
 
-* Keep connection open for multiple requests/responses
-* Improves performance by avoiding TCP handshake for each request
+- Send response in chunks of unknown size
+- Format: `<chunk-size in hex>\r\n<data>\r\n`
+- Ends with chunk-size `0\r\n\r\n`
 
-CHUNKED TRANSFER:
+## 📦 Headers / Imports
 
-* Send response in chunks of unknown size
-* Format: <chunk-size in hex>\r\n<data>\r\n
-* Ends with chunk-size 0\r\n\r\n
-
----
-HEADERS / IMPORTS:
+```cpp
 #include <string>
 #include <map>
 #include <sstream>
 #include <iostream>
+```
 
----
+## ⚙️ Declaration / Syntax
 
-DECLARATION / SYNTAX:
+```cpp
 struct HttpRequest {
     std::string method;
     std::string uri;
@@ -86,30 +86,27 @@ struct HttpResponse {
     std::map<std::string, std::string> headers;
     std::string body;
 };
+```
 
----
+## 🔧 Parameters / Details
 
-PARAMETERS / DETAILS:
-HTTP Request:
-- method: GET, POST, DELETE, HEAD
-- uri: resource path (/index.html)
-- version: HTTP/1.1
-- headers: key-value pairs (case-insensitive)
-- body: optional, used with POST/PUT
+**HTTP Request:**
+- `method`: GET, POST, DELETE, HEAD
+- `uri`: resource path (/index.html)
+- `version`: HTTP/1.1
+- `headers`: key-value pairs (case-insensitive)
+- `body`: optional, used with POST/PUT
 
-HTTP Response:
-- version: HTTP version
-- status_code: numeric code (200, 404…)
-- reason: textual explanation ("OK", "Not Found")
-- headers: key-value metadata
-- body: content sent to client
+**HTTP Response:**
+- `version`: HTTP version
+- `status_code`: numeric code (200, 404…)
+- `reason`: textual explanation ("OK", "Not Found")
+- `headers`: key-value metadata
+- `body`: content sent to client
 
----
+## 💡 Basic Request Parsing Example
 
-//------------------------------------------------------------
-WEBSERV CONTEXT / USAGE:
-
-BASIC REQUEST PARSING EXAMPLE:
+```cpp
 std::string raw = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n";
 std::istringstream stream(raw);
 HttpRequest req;
@@ -121,8 +118,11 @@ while (std::getline(stream, line) && line != "\r") {
     if (sep != std::string::npos)
         req.headers[line.substr(0, sep)] = line.substr(sep + 2, line.size() - sep - 3);
 }
+```
 
-BASIC RESPONSE BUILD EXAMPLE:
+## 💡 Basic Response Build Example
+
+```cpp
 HttpResponse res;
 res.version = "HTTP/1.1";
 res.status_code = 200;
@@ -138,10 +138,10 @@ for(auto it = res.headers.begin(); it != res.headers.end(); ++it)
 out << "\r\n" << res.body;
 
 std::string response_str = out.str();
+```
 
----
+## 💡 Advanced Considerations
 
-ADVANCED CONSIDERATIONS:
 - Persistent connections: handle "Connection: keep-alive" vs "close"
 - Partial reads: POST body may arrive in multiple TCP packets; buffer until complete
 - Chunked encoding: optional for large responses
@@ -150,40 +150,34 @@ ADVANCED CONSIDERATIONS:
 - Multiple clients: combine with select() or poll() for concurrency
 - Request validation: reject invalid methods, malformed lines
 
----
+## ⚠️ Gotchas
 
-GOTCHAS:
-- Missing \r\n → malformed request/response
+- Missing `\r\n` → malformed request/response
 - Content-Length mismatch → client hangs
-- POST body split across multiple recv() calls → loop until complete
+- POST body split across multiple `recv()` calls → loop until complete
 - Header names case-insensitive → normalize before lookup
 - Connection may close unexpectedly → handle gracefully
 
----
+## 📝 Webserv Context
 
-* Parse request line + headers + optional body
-* Store headers in map<string,string> for quick access
-* Handle multiple clients with select() or poll()
-* GET: serve static files from root directory
-* POST: forward to CGI scripts with CONTENT_LENGTH handling
-* Handle errors: 404, 405, 413, 500
-* Use chunked encoding for dynamic content
-* Correct HTTP formatting is mandatory for norm compliance
+- Parse request line + headers + optional body
+- Store headers in `map<string,string>` for quick access
+- Handle multiple clients with `select()` or `poll()`
+- **GET**: serve static files from root directory
+- **POST**: forward to CGI scripts with CONTENT_LENGTH handling
+- Handle errors: 404, 405, 413, 500
+- Use chunked encoding for dynamic content
+- Correct HTTP formatting is mandatory for norm compliance
 
-NERDY NOTES:
+## 📝 Nerdy Notes
 
-* HTTP is stateless: maintain state via cookies or sessions if needed
-* CRLF injections/malformed headers must be sanitized
-* Always validate method, path, version
-* Large POST: read exactly Content-Length bytes
-* Non-blocking recv() may require looping to assemble full request
-* Implement minimal timeout for persistent connections
+- HTTP is stateless: maintain state via cookies or sessions if needed
+- CRLF injections/malformed headers must be sanitized
+- Always validate method, path, version
+- Large POST: read exactly Content-Length bytes
+- Non-blocking `recv()` may require looping to assemble full request
+- Implement minimal timeout for persistent connections
 
-RELATED CONCEPTS:
+## 🔗 Related Concepts
 
-* TCP sockets, non-blocking I/O, select(), poll(), CGI execution
-* std::vector for client management
-* String parsing utilities: substr, find, map
-
-=== END OF HTTP.TXT ===
-
+TCP sockets, non-blocking I/O, select(), poll(), CGI execution, std::vector for client management, String parsing utilities: substr, find, map

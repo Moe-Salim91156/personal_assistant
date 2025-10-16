@@ -1,38 +1,41 @@
-=== 42 WEBSERV: COMPLETE IMPLEMENTATION GUIDE ===
+# 42 Webserv: Complete Implementation Guide
 
-PROJECT OVERVIEW:
-Build a single-process, event-driven HTTP/1.0 server in C++98 using non-blocking sockets
-with one poll/select/epoll/kqueue loop. Parse HTTP requests incrementally, serve static
-files, handle POST uploads, DELETE, run CGI programs, enforce configuration limits.
+## Project Overview
 
-CORE REQUIREMENTS:
-✅ Configuration file with NGINX-like syntax
-✅ Non-blocking I/O with single poll() loop
-✅ GET, POST, DELETE methods
-✅ Static file serving with directory listing
-✅ File uploads (multipart/form-data)
-✅ CGI execution (PHP, Python, etc.)
-✅ Multiple listen ports
-✅ Default error pages
-✅ Never crash or hang indefinitely
+Build a single-process, event-driven HTTP/1.0 server in C++98 using non-blocking sockets with one poll/select/epoll/kqueue loop. Parse HTTP requests incrementally, serve static files, handle POST uploads, DELETE, run CGI programs, enforce configuration limits.
 
-═══════════════════════════════════════════════════════════════════════════════
-SECTION 1: OS / NETWORKING PRIMITIVES
-═══════════════════════════════════════════════════════════════════════════════
+## ✅ Core Requirements
 
-CONCEPT: TCP SOCKETS
+- Configuration file with NGINX-like syntax
+- Non-blocking I/O with single poll() loop
+- GET, POST, DELETE methods
+- Static file serving with directory listing
+- File uploads (multipart/form-data)
+- CGI execution (PHP, Python, etc.)
+- Multiple listen ports
+- Default error pages
+- Never crash or hang indefinitely
 
-WHAT IT IS:
+---
+
+# Section 1: OS / Networking Primitives
+
+## 🔧 Concept: TCP Sockets
+
+### What It Is
+
 A socket is an OS endpoint for network communication. For servers:
-1. socket()  - Create socket file descriptor
-2. bind()    - Attach to IP address and port
-3. listen()  - Mark as passive (ready to accept)
-4. accept()  - Accept incoming client connections
+
+1. `socket()` - Create socket file descriptor
+2. `bind()` - Attach to IP address and port
+3. `listen()` - Mark as passive (ready to accept)
+4. `accept()` - Accept incoming client connections
 5. read/write - Communicate with clients
-6. close()   - Clean up
+6. `close()` - Clean up
 
-BASIC SERVER SOCKET SETUP:
+### Basic Server Socket Setup
 
+```cpp
 // Create socket
 int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 if (server_fd < 0) {
@@ -66,38 +69,42 @@ if (listen(server_fd, 128) < 0) {
 struct sockaddr_in client_addr;
 socklen_t client_len = sizeof(client_addr);
 int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+```
 
-WHY IT MATTERS:
-Every HTTP request arrives as bytes on a client socket. Correct socket handling
-is the foundation of the entire server.
+### Why It Matters
 
-KEY DETAILS:
-- AF_INET = IPv4 address family
-- SOCK_STREAM = TCP (reliable, ordered byte stream)
-- SOCK_DGRAM = UDP (unreliable datagrams) - not used in this project
-- SO_REUSEADDR allows rebinding immediately after server restart
-- listen() backlog = max pending connections queue
-- accept() blocks until client connects (unless non-blocking)
+Every HTTP request arrives as bytes on a client socket. Correct socket handling is the foundation of the entire server.
 
-─────────────────────────────────────────────────────────────────────────────
+### Key Details
 
-CONCEPT: NON-BLOCKING I/O
+- `AF_INET` = IPv4 address family
+- `SOCK_STREAM` = TCP (reliable, ordered byte stream)
+- `SOCK_DGRAM` = UDP (unreliable datagrams) - not used in this project
+- `SO_REUSEADDR` allows rebinding immediately after server restart
+- `listen()` backlog = max pending connections queue
+- `accept()` blocks until client connects (unless non-blocking)
 
-WHAT IT IS:
-O_NONBLOCK flag makes syscalls (read/write) return immediately instead of blocking
-waiting for data or buffer space.
+---
 
-NON-BLOCKING MODE:
-- read() returns -1 with errno=EAGAIN if no data available
-- write() may write fewer bytes than requested if buffer full
-- accept() returns -1 with errno=EAGAIN if no pending connections
+## 🔧 Concept: Non-Blocking I/O
 
-CRITICAL PROJECT RULE:
-⚠️  You CANNOT check errno after read/write to adjust behavior!
-⚠️  You MUST use poll() to determine readiness before I/O operations!
+### What It Is
 
-SETTING NON-BLOCKING MODE:
+`O_NONBLOCK` flag makes syscalls (read/write) return immediately instead of blocking waiting for data or buffer space.
 
+**Non-blocking mode:**
+- `read()` returns -1 with errno=EAGAIN if no data available
+- `write()` may write fewer bytes than requested if buffer full
+- `accept()` returns -1 with errno=EAGAIN if no pending connections
+
+### ⚠️ Critical Project Rule
+
+**You CANNOT check errno after read/write to adjust behavior!**
+**You MUST use poll() to determine readiness before I/O operations!**
+
+### Setting Non-Blocking Mode
+
+```cpp
 // Get current flags
 int flags = fcntl(fd, F_GETFL, 0);
 if (flags < 0) {
@@ -113,25 +120,33 @@ if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
 
 // Also set FD_CLOEXEC (close-on-exec) for security
 fcntl(fd, F_SETFD, FD_CLOEXEC);
+```
 
-MACOS NOTE:
-MacOS handles write() differently. You MUST use fcntl() with these flags only:
-- F_SETFL
-- O_NONBLOCK
-- FD_CLOEXEC
-Any other flags are FORBIDDEN.
+### MacOS Note
 
-WHY NON-BLOCKING:
-Prevents slow clients or disk operations from stalling the entire server.
-The subject REQUIRES non-blocking for correctness and grading.
+MacOS handles `write()` differently. You MUST use `fcntl()` with these flags only:
+- `F_SETFL`
+- `O_NONBLOCK`
+- `FD_CLOEXEC`
 
-WRONG APPROACH (FORBIDDEN):
+Any other flags are **FORBIDDEN**.
+
+### Why Non-Blocking
+
+Prevents slow clients or disk operations from stalling the entire server. The subject REQUIRES non-blocking for correctness and grading.
+
+### ❌ Wrong Approach (FORBIDDEN)
+
+```cpp
 int bytes = read(fd, buffer, size);
 if (bytes < 0 && errno == EAGAIN) {  // ❌ FORBIDDEN!
     // Don't check errno!
 }
+```
 
-CORRECT APPROACH:
+### ✅ Correct Approach
+
+```cpp
 // Use poll() to check if fd is readable first
 struct pollfd pfd;
 pfd.fd = fd;
@@ -141,24 +156,28 @@ int ret = poll(&pfd, 1, 0);  // Non-blocking poll
 if (ret > 0 && (pfd.revents & POLLIN)) {
     int bytes = read(fd, buffer, size);  // Now safe to read
 }
+```
 
-─────────────────────────────────────────────────────────────────────────────
+---
 
-CONCEPT: MULTIPLEXING (poll/select/epoll/kqueue)
+## 🔧 Concept: Multiplexing (poll/select/epoll/kqueue)
 
-WHAT IT IS:
+### What It Is
+
 System calls that monitor multiple file descriptors for readiness events:
-- Readable (POLLIN) - data available to read
-- Writable (POLLOUT) - buffer space available to write
-- Errors (POLLERR, POLLHUP) - connection errors or hangups
+- **Readable (POLLIN)** - data available to read
+- **Writable (POLLOUT)** - buffer space available to write
+- **Errors (POLLERR, POLLHUP)** - connection errors or hangups
 
-PROJECT REQUIREMENT:
+### Project Requirement
+
 ✅ Use exactly ONE poll() (or equivalent) for ALL I/O
 ✅ Monitor server socket(s) AND all client sockets in same loop
 ✅ Never read/write without poll() indicating readiness
 
-POLL() BASIC STRUCTURE:
+### poll() Basic Structure
 
+```cpp
 struct pollfd fds[MAX_CLIENTS];
 int nfds = 0;
 
@@ -198,44 +217,46 @@ if (ret < 0) {
         }
     }
 }
+```
 
-POLL VS SELECT VS EPOLL VS KQUEUE:
+### Poll vs Select vs Epoll vs Kqueue
 
-poll():
-✅ No fd limit (select limited to 1024)
-✅ Cleaner API
-✅ Portable (Linux, MacOS, BSD)
-❌ O(n) performance
+**poll():**
+- ✅ No fd limit (select limited to 1024)
+- ✅ Cleaner API
+- ✅ Portable (Linux, MacOS, BSD)
+- ❌ O(n) performance
 
-select():
-✅ Most portable
-❌ FD_SETSIZE limit (usually 1024)
-❌ Must rebuild fd_set each iteration
-❌ O(n) performance
+**select():**
+- ✅ Most portable
+- ❌ FD_SETSIZE limit (usually 1024)
+- ❌ Must rebuild fd_set each iteration
+- ❌ O(n) performance
 
-epoll() (Linux only):
-✅ O(1) for active connections
-✅ Scalable to 10,000+ connections
-❌ Linux-specific
-✅ Edge-triggered mode available
+**epoll() (Linux only):**
+- ✅ O(1) for active connections
+- ✅ Scalable to 10,000+ connections
+- ❌ Linux-specific
+- ✅ Edge-triggered mode available
 
-kqueue() (BSD/MacOS):
-✅ O(1) for active connections
-✅ More flexible event system
-❌ BSD/MacOS only
+**kqueue() (BSD/MacOS):**
+- ✅ O(1) for active connections
+- ✅ More flexible event system
+- ❌ BSD/MacOS only
 
-PROJECT CHOICE:
-Any of these is acceptable. poll() is recommended for simplicity and portability.
+### Project Choice
 
-WHY MULTIPLEXING MATTERS:
-Single event loop = single-threaded, deterministic, no race conditions,
-easier to reason about resource usage. This is what the graders expect.
+Any of these is acceptable. **poll()** is recommended for simplicity and portability.
 
-═══════════════════════════════════════════════════════════════════════════════
-SECTION 2: HTTP/1.0 PROTOCOL
-═══════════════════════════════════════════════════════════════════════════════
+### Why Multiplexing Matters
 
-HTTP/1.0 BASICS:
+Single event loop = single-threaded, deterministic, no race conditions, easier to reason about resource usage. This is what the graders expect.
+
+---
+
+# Section 2: HTTP/1.0 Protocol
+
+## HTTP/1.0 Basics
 
 Text-based protocol over TCP. Each message has:
 1. Start line (request-line or status-line)
@@ -243,118 +264,133 @@ Text-based protocol over TCP. Each message has:
 3. Empty line (CRLF)
 4. Optional body
 
-HTTP REQUEST FORMAT:
+## HTTP Request Format
 
+```
 METHOD SP request-target SP HTTP/1.0 CRLF
 Host: localhost:8080 CRLF
 User-Agent: Mozilla/5.0 CRLF
 Content-Length: 13 CRLF
 CRLF
 Hello, World!
+```
 
-EXAMPLE REQUEST:
+### Example Request
 
+```
 GET /index.html HTTP/1.0\r\n
 Host: localhost:8080\r\n
 User-Agent: curl/7.68.0\r\n
 Accept: */*\r\n
 \r\n
+```
 
-HTTP RESPONSE FORMAT:
+## HTTP Response Format
 
+```
 HTTP/1.0 SP status-code SP reason-phrase CRLF
 Content-Type: text/html CRLF
 Content-Length: 13 CRLF
 CRLF
 <h1>Hello</h1>
+```
 
-EXAMPLE RESPONSE:
+### Example Response
 
+```
 HTTP/1.0 200 OK\r\n
 Content-Type: text/html\r\n
 Content-Length: 20\r\n
 Connection: close\r\n
 \r\n
 <h1>Hello World</h1>
+```
 
-─────────────────────────────────────────────────────────────────────────────
+---
 
-HTTP/1.0 VS HTTP/1.1 DIFFERENCES:
+## HTTP/1.0 vs HTTP/1.1 Differences
 
-HTTP/1.0:
+**HTTP/1.0:**
 - Connection: close by default (one request per TCP connection)
 - No Host header required (but send it anyway)
 - No chunked transfer encoding (body size via Content-Length or EOF)
 - Simpler but less efficient
 
-HTTP/1.1:
+**HTTP/1.1:**
 - Connection: keep-alive by default (persistent connections)
 - Host header REQUIRED
 - Chunked transfer encoding supported
 - More complex but efficient
 
-PROJECT NOTE:
-Subject says HTTP/1.0 but allows chunked encoding for CGI compatibility.
-You must decode chunked requests before passing to CGI!
+### Project Note
 
-─────────────────────────────────────────────────────────────────────────────
+Subject says HTTP/1.0 but allows chunked encoding for CGI compatibility. You must decode chunked requests before passing to CGI!
 
-REQUIRED HTTP METHODS:
+---
 
-GET - Retrieve a resource
+## Required HTTP Methods
+
+### GET - Retrieve a resource
 Request has no body (use query string for parameters)
 
-POST - Submit data to server
+### POST - Submit data to server
 Request has body (forms, file uploads, JSON)
 
-DELETE - Remove a resource
+### DELETE - Remove a resource
 Request usually has no body
 
-MUST IMPLEMENT THESE THREE!
+**MUST IMPLEMENT THESE THREE!**
 
-EXAMPLE GET REQUEST:
+### Example GET Request
 
+```
 GET /api/users?id=42 HTTP/1.0\r\n
 Host: localhost:8080\r\n
 \r\n
+```
 
-EXAMPLE POST REQUEST:
+### Example POST Request
 
+```
 POST /upload HTTP/1.0\r\n
 Host: localhost:8080\r\n
 Content-Type: application/x-www-form-urlencoded\r\n
 Content-Length: 27\r\n
 \r\n
 name=John&email=john@ex.com
+```
 
-EXAMPLE DELETE REQUEST:
+### Example DELETE Request
 
+```
 DELETE /files/document.pdf HTTP/1.0\r\n
 Host: localhost:8080\r\n
 \r\n
+```
 
-─────────────────────────────────────────────────────────────────────────────
+---
 
-IMPORTANT RESPONSE HEADERS:
+## Important Response Headers
 
-Content-Length:
+**Content-Length:**
 Size of response body in bytes. CRITICAL for client to know when body ends!
 
-Content-Type:
+**Content-Type:**
 MIME type of body (text/html, application/json, image/png, etc.)
 
-Connection:
-"close" = close after response
-"keep-alive" = keep connection open (HTTP/1.1 style)
+**Connection:**
+- "close" = close after response
+- "keep-alive" = keep connection open (HTTP/1.1 style)
 
-Date:
+**Date:**
 When response was generated (optional but nice)
 
-Server:
+**Server:**
 Server software name/version (e.g., "Webserv/1.0")
 
-EXAMPLE RESPONSE WITH HEADERS:
+### Example Response with Headers
 
+```
 HTTP/1.0 200 OK\r\n
 Date: Wed, 08 Oct 2025 12:00:00 GMT\r\n
 Server: Webserv/1.0\r\n
@@ -367,66 +403,68 @@ Connection: close\r\n
 <head><title>Test</title></head>
 <body><h1>Hello from Webserv!</h1></body>
 </html>
+```
 
-─────────────────────────────────────────────────────────────────────────────
+---
 
-HTTP STATUS CODES (YOU MUST IMPLEMENT):
+## HTTP Status Codes (YOU MUST IMPLEMENT)
 
-2xx Success:
-200 OK              - Request succeeded
-201 Created         - Resource created (POST success)
-204 No Content      - Success but no body to return
+### 2xx Success
+- **200 OK** - Request succeeded
+- **201 Created** - Resource created (POST success)
+- **204 No Content** - Success but no body to return
 
-3xx Redirection:
-301 Moved Permanently  - Resource moved, update bookmarks
-302 Found              - Temporary redirect
-304 Not Modified       - Use cached version
+### 3xx Redirection
+- **301 Moved Permanently** - Resource moved, update bookmarks
+- **302 Found** - Temporary redirect
+- **304 Not Modified** - Use cached version
 
-4xx Client Error:
-400 Bad Request        - Malformed request syntax
-403 Forbidden          - Server refuses (permissions)
-404 Not Found          - Resource doesn't exist
-405 Method Not Allowed - Method not supported for this route
-413 Payload Too Large  - Body exceeds limit
-414 URI Too Long       - URL too long
+### 4xx Client Error
+- **400 Bad Request** - Malformed request syntax
+- **403 Forbidden** - Server refuses (permissions)
+- **404 Not Found** - Resource doesn't exist
+- **405 Method Not Allowed** - Method not supported for this route
+- **413 Payload Too Large** - Body exceeds limit
+- **414 URI Too Long** - URL too long
 
-5xx Server Error:
-500 Internal Server Error - Server crashed/exception
-501 Not Implemented       - Feature not supported
-503 Service Unavailable   - Server overloaded
+### 5xx Server Error
+- **500 Internal Server Error** - Server crashed/exception
+- **501 Not Implemented** - Feature not supported
+- **503 Service Unavailable** - Server overloaded
 
-BODY DELIMITING IN HTTP/1.0:
+## Body Delimiting in HTTP/1.0
 
-Method 1: Content-Length header
+**Method 1: Content-Length header**
 Server sends exact byte count, client reads that many bytes.
 
-Method 2: Connection close
-Server closes connection when done sending (EOF marks end).
-This is HTTP/1.0 default!
+**Method 2: Connection close**
+Server closes connection when done sending (EOF marks end). This is HTTP/1.0 default!
 
-CRITICAL FOR CGI:
+### Critical for CGI
+
 If CGI doesn't return Content-Length, you must read until EOF (pipe close)!
 
-═══════════════════════════════════════════════════════════════════════════════
-SECTION 3: INCREMENTAL PARSING & STATE MACHINE
-═══════════════════════════════════════════════════════════════════════════════
+---
 
-WHY INCREMENTAL PARSING:
+# Section 3: Incremental Parsing & State Machine
+
+## Why Incremental Parsing
 
 TCP is a byte stream - NOT a message stream!
-- read() may return 1 byte
-- read() may return partial headers
-- read() may return headers + part of body
-- read() may return multiple pipelined requests
+- `read()` may return 1 byte
+- `read()` may return partial headers
+- `read()` may return headers + part of body
+- `read()` may return multiple pipelined requests
 
-YOU CANNOT assume whole HTTP messages arrive in one syscall!
+**YOU CANNOT assume whole HTTP messages arrive in one syscall!**
 
-SOLUTION: Per-connection state machine + buffering
+**Solution:** Per-connection state machine + buffering
 
-─────────────────────────────────────────────────────────────────────────────
+---
 
-CONNECTION STATE MACHINE:
+## Connection State Machine
 
+```cpp
 enum ConnectionState {
     READING_HEADERS,        // Accumulate until \r\n\r\n found
     HEADERS_PARSED,         // Determine if body exists
@@ -436,11 +474,13 @@ enum ConnectionState {
     SENDING_RESPONSE,       // Non-blocking write response
     DONE                    // Close or keep-alive
 };
+```
 
-STATE: READING_HEADERS
+### STATE: READING_HEADERS
 
 Goal: Accumulate bytes until finding "\r\n\r\n" (header terminator)
 
+```cpp
 void handle_reading_headers(Connection& conn) {
     char buffer[4096];
     int bytes = read(conn.fd, buffer, sizeof(buffer));
@@ -478,11 +518,13 @@ void handle_reading_headers(Connection& conn) {
         conn.state = DONE;
     }
 }
+```
 
-STATE: HEADERS_PARSED
+### STATE: HEADERS_PARSED
 
 Goal: Determine if request has a body
 
+```cpp
 void handle_headers_parsed(Connection& conn) {
     // Check for Content-Length header
     if (conn.request.hasHeader("Content-Length")) {
@@ -506,11 +548,13 @@ void handle_headers_parsed(Connection& conn) {
         conn.state = PROCESSING;
     }
 }
+```
 
-STATE: READING_BODY
+### STATE: READING_BODY
 
 Goal: Read exactly Content-Length bytes
 
+```cpp
 void handle_reading_body(Connection& conn) {
     size_t needed = conn.expected_body_size - conn.body_buffer.size();
     
@@ -544,11 +588,13 @@ void handle_reading_body(Connection& conn) {
         conn.state = PROCESSING;
     }
 }
+```
 
-STATE: PROCESSING
+### STATE: PROCESSING
 
 Goal: Route request and generate response
 
+```cpp
 void handle_processing(Connection& conn) {
     // Route based on method, path, and config
     Route* route = find_route(conn.request.path, config);
@@ -581,11 +627,13 @@ void handle_processing(Connection& conn) {
         conn.state = SENDING_RESPONSE;
     }
 }
+```
 
-STATE: SENDING_RESPONSE
+### STATE: SENDING_RESPONSE
 
 Goal: Non-blocking write of response
 
+```cpp
 void handle_sending_response(Connection& conn) {
     if (conn.write_queue.empty()) {
         conn.state = DONE;
@@ -616,11 +664,13 @@ void handle_sending_response(Connection& conn) {
         conn.write_offset = 0;
     }
 }
+```
 
-STATE: DONE
+### STATE: DONE
 
 Goal: Clean up or keep-alive
 
+```cpp
 void handle_done(Connection& conn) {
     // Check for Connection: keep-alive
     if (conn.request.getHeader("Connection") == "keep-alive" && 
@@ -637,12 +687,13 @@ void handle_done(Connection& conn) {
     close(conn.fd);
     remove_connection(conn);
 }
+```
 
-═══════════════════════════════════════════════════════════════════════════════
-SECTION 4: EVENT LOOP - THE HEART OF THE SERVER
-═══════════════════════════════════════════════════════════════════════════════
+---
 
-SINGLE EVENT LOOP RESPONSIBILITIES:
+# Section 4: Event Loop - The Heart of the Server
+
+## Single Event Loop Responsibilities
 
 1. Accept new connections (listener sockets)
 2. Poll all client sockets for readability/writability/errors
@@ -651,8 +702,9 @@ SINGLE EVENT LOOP RESPONSIBILITIES:
 5. Enforce timeouts and resource limits
 6. Reap finished CGI child processes
 
-COMPLETE EVENT LOOP PSEUDOCODE:
+## Complete Event Loop Pseudocode
 
+```cpp
 void run_server() {
     // Setup
     std::vector<int> listener_fds = setup_listeners(config);
@@ -738,170 +790,26 @@ void run_server() {
         check_resource_limits(connections, poll_fds);
     }
 }
+```
 
-HELPER FUNCTIONS:
+---
 
-void accept_clients(int listener_fd, 
-                    std::map<int, Connection>& connections,
-                    std::vector<struct pollfd>& poll_fds) {
-    while (true) {
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-        
-        int client_fd = accept(listener_fd, 
-                              (struct sockaddr*)&client_addr, 
-                              &client_len);
-        
-        if (client_fd < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // No more pending connections
-                break;
-            }
-            if (errno == EMFILE || errno == ENFILE) {
-                // Too many open files - close oldest idle connection
-                close_oldest_idle(connections, poll_fds);
-                continue;
-            }
-            perror("accept");
-            break;
-        }
-        
-        // Set non-blocking
-        set_nonblocking(client_fd);
-        
-        // Create connection object
-        Connection conn;
-        conn.fd = client_fd;
-        conn.state = READING_HEADERS;
-        conn.last_activity = time(NULL);
-        connections[client_fd] = conn;
-        
-        // Add to poll
-        struct pollfd pfd;
-        pfd.fd = client_fd;
-        pfd.events = POLLIN;  // Initially just monitor reads
-        pfd.revents = 0;
-        poll_fds.push_back(pfd);
-        
-        std::cout << "New client: " << client_fd << std::endl;
-    }
-}
+## 📝 42 Specific Notes - CRITICAL RULES
 
-void handle_read(Connection& conn) {
-    switch (conn.state) {
-        case READING_HEADERS:
-            handle_reading_headers(conn);
-            break;
-        case READING_BODY:
-            handle_reading_body(conn);
-            break;
-        case READING_CHUNKED_BODY:
-            handle_reading_chunked_body(conn);
-            break;
-        default:
-            // Unexpected read in this state
-            break;
-    }
-}
+⚠️ One poll() for ALL I/O (server + clients + CGI)
+⚠️ Never read/write without poll() readiness
+⚠️ Never check errno after read/write
+⚠️ fork() ONLY for CGI
+⚠️ Non-blocking mode on ALL fds
+⚠️ Functions max 25 lines (norm compliance)
+⚠️ C++98 only (no C++11 features)
+⚠️ Must handle client disconnects gracefully
+⚠️ Must survive stress tests
+⚠️ Must serve multiple ports
+⚠️ Configuration file required
 
-void handle_write(Connection& conn) {
-    switch (conn.state) {
-        case SENDING_RESPONSE:
-            handle_sending_response(conn);
-            break;
-        default:
-            // Unexpected write in this state
-            break;
-    }
-}
+## 📝 Allowed System Calls
 
-void update_poll_events(Connection& conn, struct pollfd& pfd) {
-    pfd.events = 0;
-    
-    switch (conn.state) {
-        case READING_HEADERS:
-        case READING_BODY:
-        case READING_CHUNKED_BODY:
-            pfd.events = POLLIN;  // Wait for data to read
-            break;
-            
-        case PROCESSING:
-            // No events while processing
-            // (unless waiting for CGI, then monitor CGI pipes)
-            break;
-            
-        case SENDING_RESPONSE:
-            if (!conn.write_queue.empty()) {
-                pfd.events = POLLOUT;  // Wait until writable
-            }
-            break;
-            
-        case DONE:
-            // No events - will be removed
-            break;
-    }
-}
-
-void check_timeouts(std::map<int, Connection>& connections) {
-    time_t now = time(NULL);
-    std::vector<int> to_remove;
-    
-    for (std::map<int, Connection>::iterator it = connections.begin();
-         it != connections.end(); ++it) {
-        
-        time_t idle = now - it->second.last_activity;
-        
-        // Different timeouts for different states
-        int timeout;
-        switch (it->second.state) {
-            case READING_HEADERS:
-                timeout = 10;  // 10 seconds to send headers
-                break;
-            case READING_BODY:
-                timeout = 60;  // 60 seconds for body
-                break;
-            case PROCESSING:
-                timeout = 30;  // 30 seconds for processing
-                break;
-            case SENDING_RESPONSE:
-                timeout = 60;  // 60 seconds to receive response
-                break;
-            default:
-                timeout = 120;  // 2 minutes default
-                break;
-        }
-        
-        if (idle > timeout) {
-            std::cout << "Connection " << it->first << " timed out" << std::endl;
-            to_remove.push_back(it->first);
-        }
-    }
-    
-    // Close timed-out connections
-    for (size_t i = 0; i < to_remove.size(); i++) {
-        // Find and remove from poll_fds and connections
-        // (implementation details omitted)
-    }
-}
-
-═══════════════════════════════════════════════════════════════════════════════
-42 SPECIFIC NOTES:
-═══════════════════════════════════════════════════════════════════════════════
-
-CRITICAL RULES:
-⚠️  One poll() for ALL I/O (server + clients + CGI)
-⚠️  Never read/write without poll() readiness
-⚠️  Never check errno after read/write
-⚠️  fork() ONLY for CGI
-⚠️  Non-blocking mode on ALL fds
-⚠️  Functions max 25 lines (norm compliance)
-⚠️  C++98 only (no C++11 features)
-⚠️  Must handle client disconnects gracefully
-⚠️  Must survive stress tests
-⚠️  Must serve multiple ports
-⚠️  Configuration file required
-
-ALLOWED SYSTEM CALLS:
 socket, bind, listen, accept, connect
 setsockopt, getsockname, getpeername
 htons, htonl, ntohs, ntohl

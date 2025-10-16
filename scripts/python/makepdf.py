@@ -25,9 +25,29 @@ def look_for_file(file_name):
 def export_to_pdf(file_path):
     file_content = load_file_content(file_path)
     pdf_path = file_path.with_suffix(".pdf")
-    pdf = MarkdownPdf()
-    pdf.add_section(Section(file_content))
+    
+    # Create custom CSS file
+    css_path = Path(__file__).parent / "pdf_style.css"
+    if not css_path.exists():
+        css_content = """
+body { font-family: 'Segoe UI', sans-serif; line-height: 1.6; color: #2c3e50; }
+h1 { color: #2980b9; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+h2 { color: #16a085; margin-top: 24px; }
+h3 { color: #27ae60; }
+code { background-color: #f4f4f4; padding: 2px 6px; border-radius: 3px; color: #c7254e; }
+pre { background-color: #f8f9fa; border-left: 4px solid #3498db; padding: 12px; }
+pre code { background-color: transparent; color: #2c3e50; }
+strong { color: #e74c3c; }
+"""
+        css_path.write_text(css_content)
+    
+    pdf = MarkdownPdf(toc_level=2)
+    pdf.meta["title"] = file_path.stem
+    pdf.meta["author"] = "Personal Reference"
+    
+    pdf.add_section(Section(file_content, toc=True))
     pdf.save(pdf_path)
+    print(f"✅ Created: {pdf_path}")
 
 def handle():
     if len(sys.argv) < 2 :

@@ -1,22 +1,27 @@
-=== LANGUAGE: poll() (CPP98 / Webserv) ===
+# poll() - CPP98 / Webserv
 
-WHAT IS POLL()?
-poll() is a **system call for monitoring multiple file descriptors** to see if I/O is possible.  
-- More scalable than select() for many clients.  
-- Monitors sockets (or other fds) for: readable, writable, or error conditions.  
-- Used in Webserv to handle **multiple clients simultaneously** without blocking.  
+## ❓ What Is poll()?
 
-KEY CONCEPTS:
-- struct pollfd: describes each fd to monitor
-    - fd: file descriptor
-    - events: events to watch (POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL)
-    - revents: events that occurred
-- timeout: wait time in milliseconds (-1 = infinite, 0 = poll and return immediately)
-- Returns number of fds ready, 0 if timeout, -1 on error
+`poll()` is a **system call for monitoring multiple file descriptors** to see if I/O is possible.
 
----
+- More scalable than `select()` for many clients
+- Monitors sockets (or other fds) for: readable, writable, or error conditions
+- Used in Webserv to handle **multiple clients simultaneously** without blocking
 
-HEADERS / IMPORTS:
+## 🔧 Key Concepts
+
+**struct pollfd:** describes each fd to monitor
+- `fd`: file descriptor
+- `events`: events to watch (POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL)
+- `revents`: events that occurred
+
+**timeout:** wait time in milliseconds (-1 = infinite, 0 = poll and return immediately)
+
+**Returns:** number of fds ready, 0 if timeout, -1 on error
+
+## 📦 Headers / Imports
+
+```cpp
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -24,41 +29,41 @@ HEADERS / IMPORTS:
 #include <iostream>
 #include <vector>
 #include <cstring>
+```
 
----
+## ⚙️ Declaration / Syntax
 
-DECLARATION / SYNTAX:
+```cpp
 int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+```
 
----
+## 🔧 Parameters / Details
 
-PARAMETERS / DETAILS:
+**pollfd struct:**
+- `fd`: file descriptor to monitor
+- `events`: bitmask of requested events
+  - `POLLIN` = data to read
+  - `POLLOUT` = ready to write
+  - `POLLERR` = error condition
+  - `POLLHUP` = hang up
+  - `POLLNVAL` = invalid fd
+- `revents`: bitmask set by kernel with occurred events
 
-pollfd struct:
-- fd: file descriptor to monitor
-- events: bitmask of requested events
-    - POLLIN = data to read
-    - POLLOUT = ready to write
-    - POLLERR = error condition
-    - POLLHUP = hang up
-    - POLLNVAL = invalid fd
-- revents: bitmask set by kernel with occurred events
-
-poll():
-- fds: array of pollfd structs
-- nfds: number of fds in the array
-- timeout: milliseconds to wait (-1 = infinite)
+**poll():**
+- `fds`: array of pollfd structs
+- `nfds`: number of fds in the array
+- `timeout`: milliseconds to wait (-1 = infinite)
 - Returns: number of fds with events, 0 on timeout, -1 on error
 
-recv()/send() (common with poll):
-- buf: buffer pointer
-- len: buffer length
-- flags: usually 0
+**recv()/send() (common with poll):**
+- `buf`: buffer pointer
+- `len`: buffer length
+- `flags`: usually 0
 - Returns: bytes read/written, 0 on disconnect, -1 on error
 
----
+## 💡 Basic Example
 
-BASIC EXAMPLE:
+```cpp
 std::vector<pollfd> fds;
 pollfd server_fd;
 server_fd.fd = sockfd;
@@ -82,45 +87,37 @@ if (ready > 0) {
         }
     }
 }
+```
 
----
+## 💡 Advanced Considerations
 
-ADVANCED CONSIDERATIONS:
-- Combine poll() with non-blocking sockets for scalable servers
-- Check revents for POLLERR, POLLHUP, POLLNVAL to handle errors
+- Combine `poll()` with non-blocking sockets for scalable servers
+- Check `revents` for POLLERR, POLLHUP, POLLNVAL to handle errors
 - Dynamic vector of pollfd allows adding/removing clients at runtime
 - Always update nfds / vector after removing disconnected clients
 - Works with TCP, UDP, pipes, terminals
 
----
+## ⚠️ Gotchas
 
-GOTCHAS:
-- Forgetting to check revents → may miss errors or hangups
-- Using blocking sockets → poll may indicate ready but recv() still blocks
+- Forgetting to check `revents` → may miss errors or hangups
+- Using blocking sockets → poll may indicate ready but `recv()` still blocks
 - Modifying pollfd array while iterating → iterate carefully
 - Timeout = 0 → busy loop; timeout = -1 → blocks indefinitely
 
----
+## 📝 42 Specific Notes
 
-42 SPECIFIC NOTES:
-- Use poll() to manage multiple clients instead of select() for large number
-- Must handle disconnects gracefully (recv() = 0)
+- Use `poll()` to manage multiple clients instead of `select()` for large number
+- Must handle disconnects gracefully (`recv()` = 0)
 - Keep functions <25 lines (norm compliance)
-- Manual parsing after recv() for HTTP requests
+- Manual parsing after `recv()` for HTTP requests
 
----
+## 📝 CPP98 Constraints
 
-CPP98 CONSTRAINTS:
 - No range-based for; use explicit loops
 - No auto keyword
-- Use std::vector or arrays for pollfd storage
+- Use `std::vector` or arrays for pollfd storage
 - Manual memory management if needed
 
----
+## 🔗 Related Concepts
 
-RELATED CONCEPTS:
-- select()
-- recv()/send()
-- Non-blocking sockets
-- Sockets, HTTP parsing, Webserv concurrency
-
+select(), recv()/send(), Non-blocking sockets, Sockets, HTTP parsing, Webserv concurrency
