@@ -1,27 +1,33 @@
-=== LANGUAGE: CGI (Common Gateway Interface) (CPP98 / Webserv) ===
+# CGI (Common Gateway Interface) - CPP98 / Webserv
 
-WHAT IS CGI?
-CGI is a standard interface between web servers and external programs (scripts or binaries) that generate dynamic content.  
-- Allows Webserv to execute programs and return their output as HTTP responses.  
-- CGI programs can be written in C++, Python, Bash, or any executable language.  
-- Webserv invokes CGI with environment variables and stdin/stdout communication.  
+## ❓ What Is CGI?
 
-KEY CONCEPTS:
-- Environment variables: pass request info to CGI
-    - REQUEST_METHOD: GET, POST, etc.
-    - QUERY_STRING: data after `?` in URL
-    - CONTENT_LENGTH: size of POST body
-    - CONTENT_TYPE: MIME type
-    - SCRIPT_NAME, PATH_INFO, SERVER_NAME, SERVER_PORT
-- Standard I/O:
-    - stdin: CGI reads POST body
-    - stdout: CGI writes HTTP response (headers + body)
-- Security: restrict which scripts can execute
-- In Webserv, CGI is usually forked per request, output captured via pipe  
+CGI is a standard interface between web servers and external programs (scripts or binaries) that generate dynamic content.
 
----
+- Allows Webserv to execute programs and return their output as HTTP responses
+- CGI programs can be written in C++, Python, Bash, or any executable language
+- Webserv invokes CGI with environment variables and stdin/stdout communication
 
-HEADERS / IMPORTS:
+## 🔧 Key Concepts
+
+**Environment variables:** pass request info to CGI
+- `REQUEST_METHOD`: GET, POST, etc.
+- `QUERY_STRING`: data after `?` in URL
+- `CONTENT_LENGTH`: size of POST body
+- `CONTENT_TYPE`: MIME type
+- `SCRIPT_NAME`, `PATH_INFO`, `SERVER_NAME`, `SERVER_PORT`
+
+**Standard I/O:**
+- stdin: CGI reads POST body
+- stdout: CGI writes HTTP response (headers + body)
+
+**Security:** restrict which scripts can execute
+
+**In Webserv:** CGI is usually forked per request, output captured via pipe
+
+## 📦 Headers / Imports
+
+```cpp
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -31,10 +37,11 @@ HEADERS / IMPORTS:
 #include <cerrno>
 #include <iostream>
 #include <cstdlib>
+```
 
----
+## ⚙️ Declaration / Syntax
 
-DECLARATION / SYNTAX:
+```cpp
 pid_t pid = fork();
 if (pid == 0) {
     // child process: execute CGI
@@ -48,34 +55,33 @@ if (pid == 0) {
     // fork failed
     perror("fork failed");
 }
+```
 
----
+## 🔧 Parameters / Details
 
-PARAMETERS / DETAILS:
-
-fork():
+**fork():**
 - Returns 0 in child process, PID of child in parent, -1 on error
 
-execve():
-- script_path: path to CGI executable
-- argv: argument array (argv[0] = program name, argv[n] = NULL)
-- envp: environment variables array (key=value, NULL-terminated)
+**execve():**
+- `script_path`: path to CGI executable
+- `argv`: argument array (argv[0] = program name, argv[n] = NULL)
+- `envp`: environment variables array (key=value, NULL-terminated)
 - Replaces current process image with new program
 
-Environment variables:
-- REQUEST_METHOD: GET / POST / etc.
-- QUERY_STRING: for GET data
-- CONTENT_LENGTH: bytes to read from stdin (POST)
-- CONTENT_TYPE: MIME type of body
-- SCRIPT_NAME, PATH_INFO, SERVER_NAME, SERVER_PORT: server info
+**Environment variables:**
+- `REQUEST_METHOD`: GET / POST / etc.
+- `QUERY_STRING`: for GET data
+- `CONTENT_LENGTH`: bytes to read from stdin (POST)
+- `CONTENT_TYPE`: MIME type of body
+- `SCRIPT_NAME`, `PATH_INFO`, `SERVER_NAME`, `SERVER_PORT`: server info
 
-Stdin / stdout with CGI:
+**Stdin / stdout with CGI:**
 - Parent writes POST body to pipe → child reads stdin
 - Child writes headers + body → parent reads stdout for response
 
----
+## 💡 Basic Example
 
-BASIC EXAMPLE:
+```cpp
 int pipe_fd[2];
 pipe(pipe_fd);
 pid_t pid = fork();
@@ -95,39 +101,35 @@ if (pid == 0) {
     std::cout << std::string(buffer, n);
     waitpid(pid, NULL, 0);
 }
+```
 
----
+## 💡 Advanced Considerations
 
-ADVANCED CONSIDERATIONS:
-- Must handle POST data: read CONTENT_LENGTH bytes from stdin
+- Must handle POST data: read `CONTENT_LENGTH` bytes from stdin
 - Capture both stdout and stderr for debugging CGI
 - Handle timeouts to avoid blocking server on slow CGI
 - Sanitize input to prevent command injection
 - Consider caching frequent CGI results for performance
 
----
+## ⚠️ Gotchas
 
-GOTCHAS:
 - Forgetting to set environment variables → script fails
 - Not closing unused pipe ends → deadlock
 - Partial reads/writes: always loop until done
 - Overwriting stdout/stderr incorrectly → output lost
-- Ignoring fork()/execve() errors → server crashes
+- Ignoring `fork()`/`execve()` errors → server crashes
 
----
+## 📝 42 Specific Notes
 
-42 SPECIFIC NOTES:
 - Must fork for each request
 - Keep functions <25 lines (norm compliance)
 - Parse stdin for POST requests correctly
 - Combine CGI output with HTTP headers properly
 - Handle disconnects, large payloads, and errors gracefully
 
----
+## 📝 CPP98 Constraints
 
-CPP98 CONSTRAINTS:
 - No auto keyword or range-based loops
-- Use arrays or std::vector for arguments/environment
+- Use arrays or `std::vector` for arguments/environment
 - Manual memory management if needed
 - Use only CPP98-compatible system calls
-

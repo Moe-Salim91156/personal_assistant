@@ -22,9 +22,17 @@ ch_forb:
 ref:
   script: scripts/python/ref.py
 
-ref list:
-  script: scripts/python/ref.py
+# ref list:
+#   script: scripts/python/ref.py
 
+# ref search:
+#   script: scripts/python/ref.py
+#   args: ["--search", "{query}"]
+
+export:
+  script: scripts/python/makepdf.py
+
+<<<<<<< HEAD
 ref search:
   script: scripts/python/ref.py
   args: ["--search", "{query}"]
@@ -35,3 +43,5 @@ Deploy:
 pypy:
   script: scripts/python/Deploy.py
 
+=======
+>>>>>>> 65a6989202527bea6977e544901001f4d3f14348
