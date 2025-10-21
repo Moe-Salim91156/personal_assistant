@@ -1,0 +1,30 @@
+say hello:
+  script: scripts/python/hello.py
+  args: ["{name}"]
+
+clean:
+  script: scripts/bash/clean.sh
+  args: []
+
+cleaner:
+  script: scripts/bash/cleaner.sh
+  args: ["{something}"]
+
+push:
+  script: scripts/bash/push.sh
+
+todo:
+  script: scripts/bash/todo_finder.sh
+
+ch_forb:
+  script : scripts/bash/check_forbidden.sh
+
+ref:
+  script: scripts/python/ref.py
+
+export:
+  script: scripts/python/makepdf.py
+
+Deploy:
+  script: scripts/bash/Deploy.sh
+
