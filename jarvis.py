@@ -3,6 +3,7 @@ import os
 from core.parser import parse_intent_ollama
 from core.runner_manager import execute
 
+
 def main():
     print("Jarvis Phase 2 - Modular Assistant")
     while True:
@@ -14,14 +15,13 @@ def main():
                 print("Goodbye, Sir.")
                 break
             if user_input.lower() == "clear":
-                os.system('clear')
+                os.system("clear")
                 continue
 
             response = parse_intent_ollama(user_input)
-            if response:
-                plugin = response["plugin"]
-                target = response["target"]
-                args = response["args"]
+            plugin = response["plugin"]
+            target = response["target"]
+            args = response["args"]
 
             if not plugin:
                 print("❌ Could not understand command.")
@@ -35,6 +35,6 @@ def main():
             print("\nExiting Jarvis.")
             break
 
+
 if __name__ == "__main__":
     main()
-

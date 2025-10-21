@@ -2,6 +2,7 @@
 import subprocess
 import json
 
+
 def parse_intent_ollama(user_input):
     """
     Uses Ollama locally to infer the intent (plugin) and target (command).
@@ -26,10 +27,10 @@ def parse_intent_ollama(user_input):
 
     # Call Ollama
     result = subprocess.run(
-        ["ollama", "run", "llama3", "--json"],
+        ["ollama", "run", "qwen2.5:0.5b", "--json"],
         input=prompt,
         text=True,
-        capture_output=True
+        capture_output=True,
     )
 
     try:
@@ -40,10 +41,9 @@ def parse_intent_ollama(user_input):
         return None
 
 
-
 # def parse_intent(text):
 #     """
-#     for now this is a functionting prototype. 
+#     for now this is a functionting prototype.
 
 #     later ollama will handle the parsing thing and return the dictionary -> {action: $ACTION, target: $TARGET}
 
@@ -59,4 +59,3 @@ def parse_intent_ollama(user_input):
 #     # if "export" in text_lower:
 #     #     return {"intent": "export", "target": None}
 #     return {"action": None, "target": None}
-

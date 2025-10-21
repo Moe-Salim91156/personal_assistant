@@ -8,7 +8,7 @@ def open_yaml():
     with open(yaml_path, "r") as f:
         return yaml.safe_load(f)
 
-def run(target, context=None):
+def run(target, args=None):
     """
     Execute a command defined in commands.yaml or directly run a script.
 
