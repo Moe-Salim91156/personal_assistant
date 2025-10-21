@@ -1,14 +1,8 @@
-say hello:
-  script: scripts/python/hello.py
-  args: ["{name}"]
-
 clean:
   script: scripts/bash/clean.sh
-  args: []
 
 cleaner:
   script: scripts/bash/cleaner.sh
-  args: ["{something}"]
 
 push:
   script: scripts/bash/push.sh
