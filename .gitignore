@@ -1,3 +1,4 @@
 env/
-__*
+__pycache*
 *.swp
+*.swo
