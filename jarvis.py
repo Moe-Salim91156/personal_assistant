@@ -1,6 +1,6 @@
 from prompt_toolkit import prompt
 import os
-from core.parser import parse_intent
+from core.parser import parse_intent_ollama
 from core.runner_manager import execute
 
 def main():
@@ -17,9 +17,11 @@ def main():
                 os.system('clear')
                 continue
 
-            main_dict = parse_intent(user_input)
-            plugin = main_dict.get("action")
-            target = main_dict.get("target")
+            response = parse_intent_ollama(user_input)
+            if response:
+                plugin = response["plugin"]
+                target = response["target"]
+                args = response["args"]
 
             if not plugin:
                 print("❌ Could not understand command.")

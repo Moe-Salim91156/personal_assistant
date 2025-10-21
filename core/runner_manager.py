@@ -15,7 +15,7 @@ def load_plugins():
     return plugins
 
 def execute(plugin_name, target=None, context=None):
-    plugins= load_plugins()
+    plugins = load_plugins()
     if plugin_name not in plugins:
         print(f"[runner_manager] Plugin '{plugin_name}' not found.")
         return False
