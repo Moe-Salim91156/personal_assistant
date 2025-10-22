@@ -22,13 +22,14 @@ def main():
             plugin = response["plugin"]
             target = response["target"]
             args = response["args"]
+            print("Plugin to use:", plugin)
+            print("Target:", target)
+            print("Args:", args)
 
             if not plugin:
                 print("❌ Could not understand command.")
                 continue
-            # print("target is : ", target)
-            # print("plugin is : ", plugin)
-            success = execute(plugin, target)
+            success = execute(plugin, target, args)
             print("✅ Done" if success else "❌ Failed")
 
         except KeyboardInterrupt:

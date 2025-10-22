@@ -42,6 +42,8 @@ RULES AND CONTEXT:
 
    Logic hints:
      - If the user says things like “run”, “execute”, “launch”, “trigger”, or “start”, treat that as intent to run a script.
+- If it mentions "ref" followed by anything, plugin="run_scripts", target="ref", args=everything after "ref"
+- if it mentions "list my refrences" , plugin="run_scripts", target="ref" , args="list"
      - Match approximate synonyms (e.g., “cleanup” → “cleaner”, “push my code” → “push”, “show references” → “ref”).
      - If both “clean” and “deep” are mentioned, use “cleaner”.
      - “ref” and “reference” refer to Python scripts; same for “export”.
@@ -62,6 +64,14 @@ RULES AND CONTEXT:
        "target": "cleaner",
        "args": ""
      }}
+   - Example valid output:
+     {{
+       "plugin": "run_scripts",
+       "target": "ref",
+       "args": "list"
+     }}
+
+
 """
     try:
         response = requests.post(
