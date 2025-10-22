@@ -27,51 +27,70 @@ RULES AND CONTEXT:
 
 1. PLUGIN SELECTION
    - For any command that involves running scripts (bash or python), the plugin is "run_scripts".
-   - Assume "run_scripts" unless explicitly stated otherwise.
+   - For any command that involves opening applications (e.g., "terminal", "vs code", "discord", "slack"), the plugin is "open_apps".
+   - Default to "run_scripts" if unsure, but prioritize keywords:
+       • run, execute, launch, start, trigger → run_scripts
+       • open, launch app, start app, show app → open_apps
 
 2. TARGET RESOLUTION
-   Available targets:
-     - push      → related to pushing updates, commits, or uploads.
-     - clean     → light cleanup scripts.
-     - cleaner   → deep or advanced cleanup.
+   Available targets for run_scripts:
+     - push      → pushing updates, commits, uploads.
+     - cleaner   → deep or advanced cleanup, the default cleaning script.
+     - clean     → light cleanup scripts(for 42 cluster devices).
      - ref       → reference viewer, reads or searches docs.
      - export    → exports data or references.
      - todo      → task list management.
      - deploy    → deployment or production pushes.
-     - ch_forb   → change forbidden flag (special internal command).
+     - ch_forb   → check forbidden function (internal command).
+
+   Available targets for open_apps (examples, no need to implement yet):
+     - terminal
+     - vs Code
+     - discord
+     - slack
+     - browser
+     - code editors, or any common application name in the input
 
    Logic hints:
-     - If the user says things like “run”, “execute”, “launch”, “trigger”, or “start”, treat that as intent to run a script.
-- If it mentions "ref" followed by anything, plugin="run_scripts", target="ref", args=everything after "ref"
-- if it mentions "list my refrences" , plugin="run_scripts", target="ref" , args="list"
-     - Match approximate synonyms (e.g., “cleanup” → “cleaner”, “push my code” → “push”, “show references” → “ref”).
-     - If both “clean” and “deep” are mentioned, use “cleaner”.
-     - “ref” and “reference” refer to Python scripts; same for “export”.
-     - Everything else (push, clean, cleaner, todo, deploy, ch_forb) are Bash scripts.
+     - If the user input contains words like “ref”, “reference”, or “list my references”, map to plugin="run_scripts", target="ref", args=everything after "ref" or "list".
+     - If the user input contains words like “push my code”, “run deploy”, “clean up”, map to corresponding run_scripts target.
+     - If the input contains "open", "launch", or mentions app names, map to plugin="open_apps" and target=<app name>.
+     - Always prioritize app-specific keywords for open_apps over generic "run" words.
 
 3. ARGS FIELD
-   - Always include "args" as a string. 
-   - If user input contains additional arguments after the command, include them.
-   - Example: “run push with force” → {{"plugin": "run_scripts", "target": "push", "args": "with force"}}
-   - If no arguments, use an empty string "".
+   - Always include "args" as a string.
+   - If user input contains additional arguments after the main command, include them.
+   - If no arguments exist, use an empty string "" (never omit args).
 
 4. OUTPUT
-   - Strictly output JSON (no markdown, no explanation).
-   - Never include comments or trailing commas.
-   - Example valid output:
+   - Strictly output JSON only.
+   - Never include comments, markdown, or explanations.
+   - Examples:
      {{
        "plugin": "run_scripts",
        "target": "cleaner",
        "args": ""
      }}
-   - Example valid output:
      {{
        "plugin": "run_scripts",
        "target": "ref",
        "args": "list"
      }}
+     {{
+       "plugin": "open_apps",
+       "target": "terminal",
+       "args": ""
+     }}
+     {{
+       "plugin": "open_apps",
+       "target": "vs Code",
+       "args": ""
+     }}
 
-
+5. IMPORTANT
+   - Make sure the plugin is **always correct**: either run_scripts or open_apps.
+   - Make sure "args" field **always exists**.
+   - Do not create plugins that don’t exist yet; just classify correctly.
 """
     try:
         response = requests.post(
