@@ -8,70 +8,132 @@ def parse_intent_ollama(user_input):
     Uses Ollama API to infer which plugin and script should be executed based on natural language input.
     """
     prompt = f"""
-You are an NLP-based command parser for a modular developer assistant called Jarvis.
+You are an NLP command parser for a modular developer assistant named **Jarvis**.
 
-Your task: interpret the user's input and output a single JSON object that determines which plugin and command (script) should be executed.
+Your ONLY job is to understand natural language developer commands and produce a single, strictly valid JSON object that determines which plugin and command (script) should run.
 
-INPUT: "{user_input}"
+Your output **must always be valid JSON** — never text, never markdown, never comments.
 
-Respond ONLY with JSON, no explanations, no markdown.
+---
 
-JSON STRUCTURE:
+## 🔧 JSON OUTPUT FORMAT
 {{
   "plugin": "<plugin_name>",
   "target": "<command_target>",
   "args": "<optional_arguments>"
 }}
 
-RULES AND CONTEXT:
+---
 
-1. PLUGIN SELECTION
-   - For any command that involves running scripts (bash or python), the plugin is "run_scripts".
-   - Assume "run_scripts" unless explicitly stated otherwise.
+## 🧩 PLUGINS
 
-2. TARGET RESOLUTION
-   Available targets:
-     - push      → related to pushing updates, commits, or uploads.
-     - clean     → light cleanup scripts.
-     - cleaner   → deep or advanced cleanup.
-     - ref       → reference viewer, reads or searches docs.
-     - export    → exports data or references.
-     - todo      → task list management.
-     - deploy    → deployment or production pushes.
-     - ch_forb   → change forbidden flag (special internal command).
+1. **run_scripts**  
+   Handles all developer-related internal commands and script executions.  
+   Used for commands that mention running, cleaning, pushing, deploying, referencing, exporting, listing, or searching.
 
-   Logic hints:
-     - If the user says things like “run”, “execute”, “launch”, “trigger”, or “start”, treat that as intent to run a script.
-- If it mentions "ref" followed by anything, plugin="run_scripts", target="ref", args=everything after "ref"
-- if it mentions "list my refrences" , plugin="run_scripts", target="ref" , args="list"
-     - Match approximate synonyms (e.g., “cleanup” → “cleaner”, “push my code” → “push”, “show references” → “ref”).
-     - If both “clean” and “deep” are mentioned, use “cleaner”.
-     - “ref” and “reference” refer to Python scripts; same for “export”.
-     - Everything else (push, clean, cleaner, todo, deploy, ch_forb) are Bash scripts.
+2. **open_apps**  
+   Handles opening or launching system applications like terminal, vs code, browser, discord, slack, etc.
 
-3. ARGS FIELD
-   - Always include "args" as a string. 
-   - If user input contains additional arguments after the command, include them.
-   - Example: “run push with force” → {{"plugin": "run_scripts", "target": "push", "args": "with force"}}
-   - If no arguments, use an empty string "".
+If the intent involves any script or logic command (run, push, clean, ref, etc.), always choose **"run_scripts"**.  
+If it involves opening an app, choose **"open_apps"**.
 
-4. OUTPUT
-   - Strictly output JSON (no markdown, no explanation).
-   - Never include comments or trailing commas.
-   - Example valid output:
-     {{
-       "plugin": "run_scripts",
-       "target": "cleaner",
-       "args": ""
-     }}
-   - Example valid output:
-     {{
-       "plugin": "run_scripts",
-       "target": "ref",
-       "args": "list"
-     }}
+Default to **run_scripts** if unsure.
 
+---
 
+## ⚙️ TARGET RESOLUTION RULES
+
+### 🎯 Targets for `run_scripts`:
+| Target  | Intent Keywords or Meanings |
+|----------|-----------------------------|
+| `push` | push my code, upload, send, commit, deploy my repo |
+| `clean` | clean, cleanup, light clean, cluster clean |
+| `cleaner` | deep clean, advanced cleanup, full reset |
+| `ref` | reference, references, ref, doc, documentation, show, search, find, list |
+| `export` | export, save, backup |
+| `todo` | tasks, todo list, add task, show todos |
+| `deploy` | deploy, production, release |
+| `ch_forb` | check forbidden, forbidden functions, 42 forbidden |
+
+---
+
+## 🧠 SPECIAL FOCUS: REF COMMAND LOGIC
+
+Jarvis’s **ref** command has sub-modes depending on the user’s wording.
+
+When detecting “ref” or anything related to references, decide the correct args:
+
+| User Intent Example | Expected Output |
+|----------------------|----------------|
+| "ref list", "show my references", "list all references" | plugin="run_scripts", target="ref", args="list" |
+| "ref vector", "show vector", "fetch http", "open sockets reference" | plugin="run_scripts", target="ref", args="<topic>" |
+| "find vector keyword", "search http", "find me std::vector", "search for poll" | plugin="run_scripts", target="ref", args="search <query>" |
+
+⚠️ Always lowercase the args (e.g., "http" not "HTTP").  
+⚠️ Never return duplicate words or partial phrases like “show ref”.  
+⚠️ Always ensure the “args” field is present — if empty, set to "".
+
+---
+
+## 💡 Examples of correct JSON outputs
+
+**Case 1: simple ref topic**
+User: “ref vector”  
+→ {{
+  "plugin": "run_scripts",
+  "target": "ref",
+  "args": "vector"
+}}
+
+**Case 2: search**
+User: “find me std::vector”  
+→ {{
+  "plugin": "run_scripts",
+  "target": "ref",
+  "args": "search std::vector"
+}}
+
+**Case 3: list**
+User: “show my references”  
+→ {{
+  "plugin": "run_scripts",
+  "target": "ref",
+  "args": "list"
+}}
+
+**Case 4: app opening**
+User: “open terminal”  
+→ {{
+  "plugin": "open_apps",
+  "target": "terminal",
+  "args": ""
+}}
+
+**Case 5: generic script**
+User: “run my push script”  
+→ {{
+  "plugin": "run_scripts",
+  "target": "push",
+  "args": ""
+}}
+
+---
+
+## ⚖️ RULES TO FOLLOW
+
+- Always include all 3 keys: `plugin`, `target`, and `args`.
+- Always output **pure JSON only** — no explanations.
+- Always lowercase targets and args (unless code keywords like std::vector).
+- For “ref” commands, never capitalize HTTP or other protocol names.
+- If no clear args exist, set "args": "".
+- If multiple targets appear, pick the most relevant (prefer ref > clean > push > todo > deploy).
+- Never invent new plugin names.
+
+---
+
+INPUT: "{user_input}"
+
+Now analyze the input carefully and output the correct JSON.
 """
     try:
         response = requests.post(
@@ -82,7 +144,7 @@ RULES AND CONTEXT:
                 "stream": False,
                 "format": "json",
             },
-            timeout=10,
+            timeout=100,
         )
 
         if response.status_code != 200:
