@@ -275,7 +275,7 @@ def search_references(query):
     found = []
     query_lower = query.lower()
 
-    for ref_file in REF_BASE.rglob("*.ref"):
+    for ref_file in REF_BASE.rglob("*.md"):
         try:
             with open(ref_file, "r") as f:
                 content = f.read()
