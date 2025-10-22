@@ -8,89 +8,129 @@ def parse_intent_ollama(user_input):
     Uses Ollama API to infer which plugin and script should be executed based on natural language input.
     """
     prompt = f"""
-You are an NLP-based command parser for a modular developer assistant called Jarvis.
-
-Your task: interpret the user's input and output a single JSON object that determines which plugin and command (script) should be executed.
+You are an advanced NLP-based command parser for a modular developer assistant called Jarvis. Your goal is to **always accurately determine the plugin, target, and args** for user commands.
 
 INPUT: "{user_input}"
 
-Respond ONLY with JSON, no explanations, no markdown.
+Respond ONLY with JSON. No markdown, no explanations, no extra text.
 
 JSON STRUCTURE:
 {{
-  "plugin": "<plugin_name>",
-  "target": "<command_target>",
-  "args": "<optional_arguments>"
+  "plugin": "<plugin_name>",       # Must be "run_scripts" or "open_apps"
+  "target": "<command_target>",    # Exact command to execute
+  "args": "<optional_arguments>"   # Always a string, never omitted
 }}
 
-RULES AND CONTEXT:
+RULES:
 
 1. PLUGIN SELECTION
-   - For any command that involves running scripts (bash or python), the plugin is "run_scripts".
-   - For any command that involves opening applications (e.g., "terminal", "vs code", "discord", "slack"), the plugin is "open_apps".
-   - Default to "run_scripts" if unsure, but prioritize keywords:
-       • run, execute, launch, start, trigger → run_scripts
-       • open, launch app, start app, show app → open_apps
+  1.1 **Reference-related commands** (highest priority):
+      - Keywords: ref, reference, references, list references, list my references
+      - Action words: fetch, show, get, open, please, me, the → all **strip** from args
+      - **Search commands**: if input contains "search" or "find", args = "search <topic>"
+          Examples:
+            • "find vector keyword" → args="search vector"
+            • "find me std::vector" → args="search std::vector"
+            • "search HTTP requests" → args="search HTTP requests"
+      - **View commands**: if input contains "fetch", "show", "get", "open" → args = "<topic>"
+          Examples:
+            • "fetch HTTP" → args="HTTP"
+            • "show vectors" → args="vectors"
+            • "get webserv reference" → args="webserv"
+      - **Listing commands**: "list all references", "list my references", "list references" → args="list"
+      - **Important**: Preserve exact topic capitalization (HTTP, std::vector, etc.)
+      - Normalize common typos: "refrence" → "reference"
+
+  1.2 **Export commands**
+      - Keyword: export
+      - Syntax: "export <reference_name>" → plugin="run_scripts", target="export", args="<reference_name>"
+
+  1.3 **Other run_scripts commands**
+      - push → target="push"
+      - clean → target="clean"
+      - cleaner → target="cleaner"
+      - todo → target="todo"
+      - deploy → target="deploy"
+      - ch_forb → target="ch_forb"
+      - Default: run, execute, launch, start, trigger → plugin="run_scripts"
+      - Args = remaining text after command, else ""
+
+  1.4 **Open_apps commands**
+      - Keywords: open, launch app, start app, show app
+      - App names: terminal, vs code, code, discord, slack, browser, visual studio
+      - If detected → plugin="open_apps", target="<app_name>", args=""
 
 2. TARGET RESOLUTION
-   Available targets for run_scripts:
-     - push      → pushing updates, commits, uploads.
-     - cleaner   → deep or advanced cleanup, the default cleaning script.
-     - clean     → light cleanup scripts(for 42 cluster devices).
-     - ref       → reference viewer, reads or searches docs.
-     - export    → exports data or references.
-     - todo      → task list management.
-     - deploy    → deployment or production pushes.
-     - ch_forb   → check forbidden function (internal command).
-
-   Available targets for open_apps (examples, no need to implement yet):
-     - terminal
-     - vs Code
-     - discord
-     - slack
-     - browser
-     - code editors, or any common application name in the input
-
-   Logic hints:
-     - If the user input contains words like “ref”, “reference”, or “list my references”, map to plugin="run_scripts", target="ref", args=everything after "ref" or "list".
-     - If the user input contains words like “push my code”, “run deploy”, “clean up”, map to corresponding run_scripts target.
-     - If the input contains "open", "launch", or mentions app names, map to plugin="open_apps" and target=<app name>.
-     - Always prioritize app-specific keywords for open_apps over generic "run" words.
+  - For ref commands → target="ref", args determined above
+  - For export commands → target="export", args=reference name
+  - For other scripts → map exactly as above
+  - For open_apps → target = normalized app name
 
 3. ARGS FIELD
-   - Always include "args" as a string.
-   - If user input contains additional arguments after the main command, include them.
-   - If no arguments exist, use an empty string "" (never omit args).
+  - Always include as a string
+  - Never include filler words in args
+  - Always preserve user capitalization in topic names
 
-4. OUTPUT
-   - Strictly output JSON only.
-   - Never include comments, markdown, or explanations.
-   - Examples:
-     {{
-       "plugin": "run_scripts",
-       "target": "cleaner",
-       "args": ""
-     }}
-     {{
-       "plugin": "run_scripts",
-       "target": "ref",
-       "args": "list"
-     }}
-     {{
-       "plugin": "open_apps",
-       "target": "terminal",
-       "args": ""
-     }}
-     {{
-       "plugin": "open_apps",
-       "target": "vs Code",
-       "args": ""
-     }}
+4. PRIORITY & DISAMBIGUATION
+  1. Detect ref/reference commands first
+  2. Detect export commands second
+  3. Detect other scripts (push, clean, cleaner, todo, deploy, ch_forb)
+  4. Detect open apps last
+  5. Default → plugin="run_scripts", target inferred from keywords if possible, args=remaining
 
-5. IMPORTANT
-   - Make sure the plugin is **always correct**: either run_scripts or open_apps.
-   - Make sure "args" field **always exists**.
-   - Do not create plugins that don’t exist yet; just classify correctly.
+5. EXAMPLES (all valid JSON):
+  {{
+    "plugin": "run_scripts",
+    "target": "ref",
+    "args": "vectors"
+  }}
+  {{
+    "plugin": "run_scripts",
+    "target": "ref",
+    "args": "HTTP"
+  }}
+  {{
+    "plugin": "run_scripts",
+    "target": "ref",
+    "args": "search std::vector"
+  }}
+  {{
+    "plugin": "run_scripts",
+    "target": "ref",
+    "args": "list"
+  }}
+  {{
+    "plugin": "run_scripts",
+    "target": "export",
+    "args": "webserv"
+  }}
+  {{
+    "plugin": "run_scripts",
+    "target": "cleaner",
+    "args": ""
+  }}
+  {{
+    "plugin": "open_apps",
+    "target": "vs code",
+    "args": ""
+  }}
+  {{
+    "plugin": "open_apps",
+    "target": "terminal",
+    "args": ""
+  }}
+
+6. IMPORTANT NOTES
+  - Plugin must always be "run_scripts" or "open_apps"
+  - Target must always be accurate
+  - Args must always exist and reflect exactly what the user wants
+  - Ref command edge cases must always map correctly:
+      • fetch/show/get/open → ref <topic>
+      • find/search → ref search <topic>
+      • list → ref list
+  - Preserve capitalization of topics
+  - Strip filler/action words only from args
+  - No unknown plugins or targets allowed
 """
     try:
         response = requests.post(
