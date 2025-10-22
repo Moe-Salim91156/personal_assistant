@@ -4,6 +4,7 @@ import os
 
 PLUGIN_FOLDER = os.path.join(os.path.dirname(__file__), "../plugins")
 
+
 def load_plugins():
     plugins = {}
     for finder, name, ispkg in pkgutil.iter_modules([PLUGIN_FOLDER]):
@@ -14,10 +15,10 @@ def load_plugins():
             print(f"[runner_manager] Failed to load {name}: {e}")
     return plugins
 
+
 def execute(plugin_name, target=None, args=None):
     plugins = load_plugins()
     if plugin_name not in plugins:
         print(f"[runner_manager] Plugin '{plugin_name}' not found.")
         return False
     return plugins[plugin_name].run(target, args)
-
