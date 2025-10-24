@@ -2,15 +2,14 @@ from markdown_pdf import MarkdownPdf, Section
 import sys
 from pathlib import Path
 
-## take .md file , load and convert it to pdf
-
 def load_file_content(path_to_file):
     with open(path_to_file, "r", encoding="utf-8") as f:
         file_content = f.read()
-    return (file_content)
+    return file_content
+
 
 def look_for_file(file_name):
-    base_dir = (Path(__file__).resolve().parent / "../../references").resolve()
+    base_dir = (Path(__file__).resolve().parent / "../../../../references").resolve()
     match = list(base_dir.rglob(file_name))
     if not match:
         print(f"❌ File '{file_name}' not found under {base_dir}")
@@ -20,7 +19,9 @@ def look_for_file(file_name):
         md_path = match[0]
         print(f"md Path {md_path}")
         print(f"📄 Found: {md_path.relative_to(base_dir)}")
-        return (md_path)
+        return md_path
+
+
 def create_custom_css():
     """Create enhanced CSS for beautiful PDFs"""
     return """
@@ -176,27 +177,30 @@ def create_custom_css():
     }
     """
 
+
 def export_to_pdf(file_path):
     file_content = load_file_content(file_path)
     pdf_path = file_path.with_suffix(".pdf")
-    
+
     pdf = MarkdownPdf(toc_level=2)
-    pdf.meta["title"] = file_path.stem.replace('_', ' ').title()
+    pdf.meta["title"] = file_path.stem.replace("_", " ").title()
     pdf.meta["author"] = "Personal Reference Library"
-    
+
     # Add custom CSS styling
     section = Section(file_content, toc=True)
     pdf.add_section(section, user_css=create_custom_css())
-    
+
     pdf.save(pdf_path)
     print(f"✅ Created: {pdf_path.name}")
     print(f"📂 Location: {pdf_path.parent}")
 
+
 def handle():
-    if len(sys.argv) < 2 :
+    if len(sys.argv) < 2:
         sys.exit(1)
     else:
         file_path = look_for_file(sys.argv[1] + ".md")
         export_to_pdf(file_path)
+
 
 handle()
