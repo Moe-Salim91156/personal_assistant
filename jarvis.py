@@ -38,9 +38,9 @@ def main():
                 print("❌ Invalid response format from parser.")
                 continue
 
-            print("Plugin to use:", plugin)
-            print("Target:", target)
-            print("Args:", args)
+            # print("Plugin to use:", plugin)
+            # print("Target:", target)
+            # print("Args:", args)
 
             if not plugin:
                 print("❌ Could not understand command.")
