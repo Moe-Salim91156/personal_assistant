@@ -19,9 +19,25 @@ def main():
                 continue
 
             response = parse_intent_ollama(user_input)
-            plugin = response["plugin"]
-            target = response["target"]
-            args = response["args"]
+
+            # Error handling: check if response is None or invalid
+            if response is None:
+                print("❌ Could not parse command. Please try again.")
+                continue
+
+            # Error handling: safely extract fields
+            try:
+                plugin = response["plugin"]
+                target = response["target"]
+                args = response["args"]
+            except KeyError as e:
+                print(f"❌ Missing field in response: {e}")
+                print("💡 Ollama returned incomplete data. Try rephrasing.")
+                continue
+            except TypeError:
+                print("❌ Invalid response format from parser.")
+                continue
+
             print("Plugin to use:", plugin)
             print("Target:", target)
             print("Args:", args)
@@ -29,12 +45,17 @@ def main():
             if not plugin:
                 print("❌ Could not understand command.")
                 continue
+
             success = execute(plugin, target, args)
             print("✅ Done" if success else "❌ Failed")
 
         except KeyboardInterrupt:
             print("\nExiting Jarvis.")
             break
+        except Exception as e:
+            # Catch any other unexpected errors to keep Jarvis running
+            print(f"❌ Unexpected error: {e}")
+            print("💡 Jarvis will continue running...")
 
 
 if __name__ == "__main__":
