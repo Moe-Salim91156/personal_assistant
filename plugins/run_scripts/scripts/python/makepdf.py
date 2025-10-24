@@ -2,9 +2,6 @@ from markdown_pdf import MarkdownPdf, Section
 import sys
 from pathlib import Path
 
-## take .md file , load and convert it to pdf
-
-
 def load_file_content(path_to_file):
     with open(path_to_file, "r", encoding="utf-8") as f:
         file_content = f.read()

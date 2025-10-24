@@ -19,6 +19,6 @@ ref:
 export:
   script: scripts/python/makepdf.py
 
-Deploy:
+deploy:
   script: scripts/bash/Deploy.sh
 
