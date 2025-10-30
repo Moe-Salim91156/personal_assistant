@@ -165,7 +165,7 @@ Output ONLY the JSON object. No explanations. No markdown.
         response = requests.post(
             "http://localhost:11434/api/generate",
             json={
-                "model": "llama3:latest",  # or "mistral:7b" for better parsing accuracy
+                "model": "qwen2.5:7b",  # or "mistral:7b" for better parsing accuracy
                 "prompt": prompt,
                 "stream": False,
                 "format": "json",
