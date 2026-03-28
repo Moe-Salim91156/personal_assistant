@@ -1,0 +1,76 @@
+hotkey: F9
+
+commands:
+
+  push:
+    plugin: scripts
+    script: /home/moe/.jarvis/scripts/bash/push.sh
+    keywords: ["push", "commit", "upload my code", "send my code"]
+    speech_template: "Done. Changes pushed to git."
+
+  clean:
+    plugin: scripts
+    script: scripts/bash/clean.sh
+    keywords: ["clean 42", "cleanup 42"]
+    speech_template: "42 cache cleaned."
+
+  cleaner:
+    plugin: scripts
+    script: scripts/bash/cleaner.sh
+    keywords: ["clean up", "cleanup", "clean system"]
+    speech_template: "System cleaned."
+
+  ref:
+    plugin: scripts
+    script: scripts/python/ref.py
+    keywords: ["ref", "reference", "show me", "look up"]
+    has_args: true
+    speech_template: "Here's the reference."
+
+  terraform_apply:
+    plugin: terraform
+    action: apply
+    keywords: ["run infra", "apply terraform", "deploy infra", "start infra"]
+    speech_template: "Infrastructure deployed."
+
+  terraform_plan:
+    plugin: terraform
+    action: plan
+    keywords: ["plan infra", "terraform plan", "check infra"]
+    speech_template: "Terraform plan complete. Check the terminal."
+
+  terraform_destroy:
+    plugin: terraform
+    action: destroy
+    keywords: ["destroy infra", "tear down", "terraform destroy"]
+    speech_template: "Infrastructure destroyed."
+
+  docker_up:
+    plugin: docker
+    action: up
+    keywords: ["start docker", "docker up", "bring up containers"]
+    speech_template: "Docker stack is up."
+
+  docker_down:
+    plugin: docker
+    action: down
+    keywords: ["stop docker", "docker down", "bring down containers"]
+    speech_template: "Docker stack stopped."
+
+  docker_status:
+    plugin: docker
+    action: ps
+    keywords: ["docker status", "what's running", "show containers"]
+    speech_template: "Here's your docker status."
+
+  open_app:
+    plugin: apps
+    keywords: ["open", "launch", "start"]
+    has_args: true
+
+planner:
+  # triggers LLM planning when these words appear
+  triggers: ["and then", "after that", "and also", "then fetch", "and tell me", "wait until"]
+  model: "qwen2.5:3b"
+  keep_alive: 0        # unload from RAM immediately after response
+  ollama_url: "http://localhost:11434"

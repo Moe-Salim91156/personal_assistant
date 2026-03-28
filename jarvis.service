@@ -1,0 +1,24 @@
+[Unit]
+Description=Jarvis Personal Assistant
+After=graphical-session.target pulseaudio.service pipewire.service
+Wants=pulseaudio.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/jarvis
+WorkingDirectory=%h/.jarvis
+Restart=on-failure
+RestartSec=5s
+
+# environment
+Environment=HOME=%h
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+# logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jarvis
+
+[Install]
+WantedBy=default.target
