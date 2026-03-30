@@ -2,15 +2,22 @@ package hotkey
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 type Hotkey struct {
-	Key string
+	Key     string
+	rawPath string
 }
 
 func New(key string) *Hotkey {
-	return &Hotkey{Key: key}
+	home, _ := os.UserHomeDir()
+	return &Hotkey{
+		Key:     key,
+		rawPath: filepath.Join(home, ".jarvis", "hotkey_raw.wav"),
+	}
 }
 
 func (h *Hotkey) WaitForPress() {
@@ -19,32 +26,31 @@ func (h *Hotkey) WaitForPress() {
 	fmt.Scanln(&input)
 }
 
-func (h *Hotkey) RecordUntilRelease() []byte {
+// RecordUntilRelease records to a WAV file and returns the path.
+func (h *Hotkey) RecordUntilRelease() string {
 	fmt.Println("🎙  Recording... Press Enter to stop.")
-	
-	// S16_LE, 16000Hz, Mono is the standard for Whisper
-	cmd := exec.Command("arecord", "-t", "wav", "-f", "S16_LE", "-r", "16000", "-c", "1")
-	
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Printf("Error creating pipe: %v\n", err)
-		return nil
-	}
-	
+
+	os.MkdirAll(filepath.Dir(h.rawPath), 0755)
+
+	cmd := exec.Command(
+		"arecord",
+		"-t", "wav",
+		"-f", "S16_LE",
+		"-r", "16000",
+		"-c", "1",
+		h.rawPath,
+	)
+
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("Error starting arecord: %v\n. Is 'alsa-utils' installed?", err)
-		return nil
+		fmt.Printf("Error starting arecord: %v\nIs 'alsa-utils' installed?\n", err)
+		return ""
 	}
 
-	// Wait for Enter to stop
 	var input string
 	fmt.Scanln(&input)
 	cmd.Process.Kill()
+	cmd.Wait()
 
-	// Capture the bytes
-	out := make([]byte, 1024*1024) // 1MB buffer limit
-	n, _ := stdout.Read(out)
-	
 	fmt.Println("🛑 Recording stopped.")
-	return out[:n]
+	return h.rawPath
 }

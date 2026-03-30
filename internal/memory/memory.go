@@ -24,7 +24,6 @@ type LogEntry struct {
 }
 
 func Open(path string) (*Memory, error) {
-	// expand ~/
 	if strings.HasPrefix(path, "~/") {
 		home, _ := os.UserHomeDir()
 		path = filepath.Join(home, path[2:])
@@ -63,25 +62,16 @@ func (m *Memory) Close() {
 	m.db.Close()
 }
 
-// Log saves every interaction — input, what jarvis did, result
 func (m *Memory) Log(input string, result any) {
-	type resultShape interface {
-		GetIntent() string
-		GetOutput() string
-		IsSuccess() bool
-	}
-
-	// flexible — store whatever we can
 	m.db.Exec(
 		`INSERT INTO sessions (input, intent, result, success) VALUES (?, ?, ?, ?)`,
 		input, fmt.Sprintf("%v", result), "", true,
 	)
 }
 
-// LastCommand returns the most recent logged command
 func (m *Memory) LastCommand() *LogEntry {
 	row := m.db.QueryRow(
-		`SELECT input, intent, result, success, at 
+		`SELECT input, intent, result, success, at
 		 FROM sessions ORDER BY id DESC LIMIT 1`,
 	)
 	var e LogEntry
@@ -93,10 +83,9 @@ func (m *Memory) LastCommand() *LogEntry {
 	return &e
 }
 
-// LastSession returns a human-readable summary of the last session
 func (m *Memory) LastSession() string {
 	rows, err := m.db.Query(
-		`SELECT input, success, at FROM sessions 
+		`SELECT input, success, at FROM sessions
 		 WHERE date(at) = date('now', '-1 day')
 		 ORDER BY id DESC LIMIT 5`,
 	)
@@ -124,7 +113,6 @@ func (m *Memory) LastSession() string {
 	return strings.Join(parts, ", ")
 }
 
-// RecentContext returns last N commands as a string for LLM context
 func (m *Memory) RecentContext(n int) string {
 	rows, err := m.db.Query(
 		`SELECT input, intent FROM sessions ORDER BY id DESC LIMIT ?`, n,
@@ -141,20 +129,4 @@ func (m *Memory) RecentContext(n int) string {
 		parts = append(parts, fmt.Sprintf("- %q → %s", input, intent))
 	}
 	return strings.Join(parts, "\n")
-}
-
-// Set stores a key/value in the context table (e.g. last terraform dir)
-func (m *Memory) Set(key, value string) {
-	m.db.Exec(
-		`INSERT INTO context (key, value, updated) VALUES (?, ?, CURRENT_TIMESTAMP)
-		 ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated=CURRENT_TIMESTAMP`,
-		key, value,
-	)
-}
-
-// Get retrieves a context value
-func (m *Memory) Get(key string) string {
-	var value string
-	m.db.QueryRow(`SELECT value FROM context WHERE key = ?`, key).Scan(&value)
-	return value
 }

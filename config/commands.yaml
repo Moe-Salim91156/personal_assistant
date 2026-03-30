@@ -4,7 +4,7 @@ commands:
 
   push:
     plugin: scripts
-    script: /home/moe/.jarvis/scripts/bash/push.sh
+    script: scripts/bash/push.sh
     keywords: ["push", "commit", "upload my code", "send my code"]
     speech_template: "Done. Changes pushed to git."
 
@@ -69,8 +69,7 @@ commands:
     has_args: true
 
 planner:
-  # triggers LLM planning when these words appear
   triggers: ["and then", "after that", "and also", "then fetch", "and tell me", "wait until"]
-  model: "qwen2.5:3b"
-  keep_alive: 0        # unload from RAM immediately after response
+  model: "llama3.1:8b"
+  keep_alive: 600
   ollama_url: "http://localhost:11434"
