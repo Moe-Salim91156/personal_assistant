@@ -11,70 +11,81 @@ import (
 )
 
 func main() {
-	fmt.Println("JARVIS: MCP Tools Online. Listening...")
-
-	// Initialize history with the System Identity
-	history := []brain.Message{
-		{Role: "system", Content: "You are JARVIS. Use the 'read_file' tool to help Moe with his code."},
-	}
+	fmt.Println("JARVIS: Systems Online. I am listening.")
 
 	for {
+		// 1. EARS: Listen for 4-5 seconds
 		input, err := ears.Listen()
-		if err != nil || strings.TrimSpace(input) == "" {
-			continue
-		}
-
-		fmt.Printf("\nMOE: %s\n", input)
-		history = append(history, brain.Message{Role: "user", Content: input})
-
-		// First pass: Ask the brain
-		resp, err := brain.Ask(history)
 		if err != nil {
-			fmt.Println("Brain Error:", err)
+			fmt.Printf("Ears Error: %v\n", err)
 			continue
 		}
 
-		// 3. TOOL EXECUTION (The "Actuator")
-		// If the model sends ToolCalls, we MUST execute them and FEED BACK the result
-		if len(resp.Message.ToolCalls) > 0 {
-			for _, call := range resp.Message.ToolCalls {
-				var toolResult string
-				var toolErr error
+		// Skip if Whisper didn't hear anything or heard background noise
+		cleanInput := strings.TrimSpace(input)
+		if cleanInput == "" || strings.Contains(cleanInput, "[BLANK_AUDIO]") {
+			continue
+		}
 
-				if call.Function.Name == "read_file" {
-					path := call.Function.Arguments["path"].(string)
-					fmt.Printf("JARVIS: [Executing Tool] Reading %s...\n", path)
+		fmt.Printf("\nDEBUG - What Whisper Heard: [%s]\n", cleanInput)
 
-					toolResult, toolErr = tools.ReadFile(path)
-					if toolErr != nil {
-						toolResult = fmt.Sprintf("Error: %v", toolErr)
-					}
+		// 2. BRAIN: Initial Thought
+		response, err := brain.Ask(cleanInput)
+		if err != nil {
+			fmt.Printf("Brain Error: %v\n", err)
+			continue
+		}
+
+		fmt.Printf("DEBUG - Brain Response: [%s]\n", response)
+
+		// 3. TOOL CHECK: Did the Brain ask to read a file?
+		// We check for both "TOOL:read_file" and "TOOL: read_file" to be safe
+		if strings.Contains(response, "TOOL:read_file") || strings.Contains(response, "TOOL: read_file") {
+
+			filename := extractFilename(response)
+			if filename != "" {
+				fmt.Printf("JARVIS: Accessing %s...\n", filename)
+
+				// 4. HANDS: Go physically reads the file
+				content, err := tools.ReadProjectFile(filename)
+				if err != nil {
+					errMsg := fmt.Sprintf("I'm sorry Moe, I couldn't find the file %s.", filename)
+					fmt.Println("Tool Error:", err)
+					voice.Speak(errMsg)
+					continue
 				}
 
-				// IMPORTANT: Add the tool output to history so the AI can "see" the file
-				history = append(history, brain.Message{
-					Role:    "tool",
-					Content: toolResult,
-					// Some models/SDKs require the ToolCallID here;
-					// for Ollama, 'tool' role with content is usually enough
-				})
-			}
+				// 5. RE-PROCESS: Feed the file content back to the Brain
+				fmt.Println("JARVIS: Analyzing content...")
+				contextPrompt := fmt.Sprintf("FILE_CONTENT(%s):\n%s", filename, content)
 
-			// 4. SECOND PASS: Now that the Brain has the file content, ask it for the final answer
-			fmt.Println("JARVIS: Processing file content...")
-			resp, err = brain.Ask(history)
-			if err != nil {
-				fmt.Println("Final Brain Error:", err)
-				continue
+				finalResponse, err := brain.Ask(contextPrompt)
+				if err != nil {
+					fmt.Println("Brain Error:", err)
+					continue
+				}
+
+				fmt.Printf("JARVIS: %s\n", finalResponse)
+				voice.Speak(finalResponse)
+				continue // Back to the start of the loop
 			}
 		}
 
-		// 5. VOICE: Final Output
-		finalText := resp.Message.Content
-		if finalText != "" {
-			history = append(history, brain.Message{Role: "assistant", Content: finalText})
-			fmt.Printf("JARVIS: %s\n", finalText)
-			voice.Speak(finalText)
-		}
+		// 6. VOICE: If no tool was needed, just speak the normal response
+		fmt.Printf("JARVIS: %s\n", response)
+		voice.Speak(response)
 	}
+}
+
+// extractFilename pulls the filename out of TOOL:read_file[filename.go]
+func extractFilename(response string) string {
+	start := strings.Index(response, "[")
+	end := strings.Index(response, "]")
+
+	if start == -1 || end == -1 || end <= start {
+		return ""
+	}
+
+	// Extract and clean up any accidental spaces
+	return strings.TrimSpace(response[start+1 : end])
 }

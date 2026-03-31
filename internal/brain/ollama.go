@@ -2,75 +2,62 @@ package brain
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"fmt"
-	"jarvis/internal/mcp"
+	// "fmt"
 	"net/http"
 )
 
-// Define the structure of a Tool Call coming FROM the AI
-type ToolCall struct {
-	Function struct {
-		Name      string         `json:"name"`
-		Arguments map[string]any `json:"arguments"`
-	} `json:"function"`
-}
-
 type Message struct {
-	Role      string     `json:"role"`
-	Content   string     `json:"content"`
-	ToolCalls []ToolCall `json:"tool_calls"` // MUST BE TOOL_CALLS (plural)
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
-type Response struct {
+type OllamaChatRequest struct {
+	Model    string    `json:"model"`
+	Messages []Message `json:"messages"`
+	Stream   bool      `json:"stream"`
+}
+
+type OllamaChatResponse struct {
 	Message Message `json:"message"`
+	Done    bool    `json:"done"`
 }
 
+// Global history to keep Jarvis's memory alive during the session
+var History []Message
 
-func Ask(messages []Message) (*Response, error) {
+func Ask(userInput string) (string, error) {
 	url := "http://localhost:11434/api/chat"
 
-	// Define the tools (Functions) the AI is allowed to use
-	tools := []map[string]any{
-		{
-			"type": "function",
-			"function": map[string]any{
-				"name":        "read_file",
-				"description": "Read the contents of a file in the project directory",
-				"parameters": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"path": map[string]any{
-							"type":        "string",
-							"description": "The path to the file (e.g., go.mod or cmd/main.go)",
-						},
-					},
-					"required": []string{"path"},
-				},
-			},
-		},
+	// If history is empty, add the System Prompt
+	if len(History) == 0 {
+		History = append(History, Message{
+			Role:    "system",
+			Content: "You are JARVIS. You help Moe in his lab. To read files, reply ONLY with: TOOL:read_file[filename.go]. Otherwise, be witty and helpful.",
+		})
 	}
 
-	payload := map[string]any{
-		"model":      "qwen2.5-coder:7b",
-		"messages":   messages,
-		"tools":      tools,
-		"stream":     false,
-		"keep_alive": 0, // Unload from VRAM immediately after thinking
+	// Add User's new message to history
+	History = append(History, Message{Role: "user", Content: userInput})
+
+	reqBody := OllamaChatRequest{
+		Model:    "qwen2.5-coder:7b",
+		Messages: History,
+		Stream:   false,
 	}
 
-	jsonData, _ := json.Marshal(payload)
+	jsonData, _ := json.Marshal(reqBody)
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("ollama connection failed: %w", err)
+		return "", err
 	}
 	defer resp.Body.Close()
 
-	var result Response
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode ollama response: %w", err)
-	}
+	var result OllamaChatResponse
+	json.NewDecoder(resp.Body).Decode(&result)
 
-	return &result, nil
+	// Add Jarvis's response to history so he remembers what he said
+	History = append(History, result.Message)
+
+	return result.Message.Content, nil
 }
