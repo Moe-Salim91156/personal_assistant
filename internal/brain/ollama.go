@@ -33,7 +33,7 @@ func Ask(userInput string) (string, error) {
 	if len(History) == 0 {
 		History = append(History, Message{
 			Role:    "system",
-			Content: "You are JARVIS. You help Moe in his lab. To read files, reply ONLY with: TOOL:read_file[filename.go]. Otherwise, be witty and helpful.",
+			Content: "You are JARVIS. You help Moe and he is your Sir, always call him that. To read files, reply ONLY with: TOOL:read_file[filename.go]. Otherwise, be witty and helpful, and always call him sir",
 		})
 	}
 
