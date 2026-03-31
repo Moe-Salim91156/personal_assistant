@@ -1,6 +1,5 @@
 # Binaries
 bin/
-jarvis
 
 # Models (Too big for Git)
 models/*.bin
