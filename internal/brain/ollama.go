@@ -32,8 +32,12 @@ func Ask(userInput string) (string, error) {
 	// If history is empty, add the System Prompt
 	if len(History) == 0 {
 		History = append(History, Message{
-			Role:    "system",
-			Content: "You are JARVIS. You help Moe and he is your Sir, always call him that. To read files, reply ONLY with: TOOL:read_file[filename.go]. Otherwise, be witty and helpful, and always call him sir",
+			Role: "system",
+			Content: "You are JARVIS. You help Moe (your Sir). not Mr. Sir, only Sir " +
+				"If you need to read a file to answer a question, you MUST respond with " +
+				"the exact string 'TOOL:read_file[FILENAME]' where FILENAME is the name of the file. " +
+				"Do not apologize, do not say you don't have access, just trigger the tool. " +
+				"After you get the file content, then you can be witty.",
 		})
 	}
 
