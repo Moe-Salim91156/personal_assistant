@@ -3,65 +3,46 @@ package brain
 import (
 	"bytes"
 	"encoding/json"
-	// "fmt"
+	"fmt"
 	"net/http"
 )
 
+type ToolCall struct {
+	Function struct {
+		Name      string         `json:"name"`
+		Arguments map[string]any `json:"arguments"`
+	} `json:"function"`
+}
+
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string     `json:"role"`
+	Content   string     `json:"content"`
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
-type OllamaChatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
-}
-
-type OllamaChatResponse struct {
+type Response struct {
 	Message Message `json:"message"`
-	Done    bool    `json:"done"`
 }
 
-// Global history to keep Jarvis's memory alive during the session
-var History []Message
-
-func Ask(userInput string) (string, error) {
-	url := "http://localhost:11434/api/chat"
-
-	// If history is empty, add the System Prompt
-	if len(History) == 0 {
-		History = append(History, Message{
-			Role: "system",
-			Content: "You are JARVIS. You help Moe (your Sir). not Mr. Sir, only Sir " +
-				"If you need to read a file to answer a question, you MUST respond with " +
-				"the exact string 'TOOL:read_file[FILENAME]' where FILENAME is the name of the file. " +
-				"Do not apologize, do not say you don't have access, just trigger the tool. " +
-				"After you get the file content, then you can be witty.",
-		})
+func Ask(messages []Message, tools []map[string]any) (*Response, error) {
+	payload := map[string]any{
+		"model":      "qwen2.5-coder:7b",
+		"messages":   messages,
+		"tools":      tools,
+		"stream":     false,
+		"keep_alive": 0,
 	}
 
-	// Add User's new message to history
-	History = append(History, Message{Role: "user", Content: userInput})
-
-	reqBody := OllamaChatRequest{
-		Model:    "qwen2.5-coder:7b",
-		Messages: History,
-		Stream:   false,
-	}
-
-	jsonData, _ := json.Marshal(reqBody)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post("http://localhost:11434/api/chat", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("ollama connection failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var result OllamaChatResponse
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	// Add Jarvis's response to history so he remembers what he said
-	History = append(History, result.Message)
-
-	return result.Message.Content, nil
+	var result Response
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode ollama response: %w", err)
+	}
+	return &result, nil
 }
