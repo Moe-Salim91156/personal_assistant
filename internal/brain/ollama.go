@@ -26,7 +26,7 @@ type Response struct {
 
 func Ask(messages []Message, tools []map[string]any) (*Response, error) {
 	payload := map[string]any{
-		"model":      "qwen2.5-coder:7b",
+		"model":      "llama3.1:8b",
 		"messages":   messages,
 		"tools":      tools,
 		"stream":     false,

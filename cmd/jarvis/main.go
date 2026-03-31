@@ -14,14 +14,13 @@ import (
 
 // Whisper hallucinates these on silence — ignore them
 var junkPhrases = map[string]bool{
-	"[blank_audio]":        true,
-	"thank you.":           true,
-	"thanks for watching.": true,
-	"you":                  true,
-	".":                    true,
-	"...":                  true,
-	"[silence]":            true,
-	"[ silence ]":          true,
+	"[blank_audio]": true,
+	"thank you.":    true,
+	"you":           true,
+	".":             true,
+	"...":           true,
+	"[silence]":     true,
+	"[ silence ]":   true,
 }
 
 // normalize moves a plain-text or markdown-fenced tool call into ToolCalls
@@ -72,11 +71,19 @@ func main() {
 	history := []brain.Message{
 		{
 			Role: "system",
-			Content: `You are JARVIS, a coding assistant.
-The working directory is '.', which is /home/moe/personal_assistant.
-Always use relative paths starting with '.' when calling file tools (e.g. path: "." or path: "./internal").
-Never use absolute paths. Never guess paths. If unsure, call list_directory with path "." first.
-When you have the answer, respond in plain English — do not call more tools.`,
+			Content: `You are JARVIS, a highly efficient AI terminal assistant for Moe, Your (Sir).
+Your goal is to execute tasks proactively using your MCP tools.
+
+### CORE OPERATING PROTOCOLS:
+1. DISCOVERY FIRST: If Moe asks about the project or "files," ALWAYS call "list_directory" with "path: "."" first to orient yourself. 
+2. NO GUESSING: Never assume a file exists. If you need to see code, use "read_file".
+3. SILENT EXECUTION: Do not explain that you are calling a tool. Just execute it.
+4. FINAL RESPONSE: Only after you have gathered all necessary data from your tools should you provide a natural language answer to Moe.
+5. CONTEXT: The current working directory is /home/moe/personal_assistant. Use relative paths starting with ".".
+6. RECURSIVE SEARCH: if Moe wanted to locate code files (.cpp, .go , .c, etc..) and they are located inside subdirectories of the current working directory you can execute list_directory on each one of the subdirectories until you see the content of each subdirectories and maybe find what Moe Wants
+### RESPONSE FORMAT:
+- If you need data: Use the tool-calling function provided.
+- If you have the data: Respond in plain, concise English and call him sir. Do not include JSON in your final verbal answer.`,
 		},
 	}
 
