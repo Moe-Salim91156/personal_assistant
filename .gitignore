@@ -1,4 +1,14 @@
-env/
-__pycache*
-*.swp
-*.swo
+# Binaries
+bin/
+jarvis
+
+# Models (Too big for Git)
+models/*.bin
+models/*.ggml
+
+# OS stuff
+.DS_Store
+.env
+
+# Go stuff
+vendor/
