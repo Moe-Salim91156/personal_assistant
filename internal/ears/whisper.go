@@ -13,7 +13,7 @@ func Listen() (string, error) {
 
 	// Record 4 seconds of audio at 16kHz (required by Whisper)
 	// 'rec' is part of the sox package
-	recordCmd := exec.Command("rec", "-r", "16000", "-c", "1", tempFile, "trim", "0", "4")
+	recordCmd := exec.Command("rec", "-r", "16000", "-c", "1", tempFile, "trim", "0", "20")
 	if err := recordCmd.Run(); err != nil {
 		return "", fmt.Errorf("mic record failed: %w", err)
 	}

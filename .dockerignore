@@ -1,0 +1,6 @@
+.git
+*.wav
+*.txt
+history.json
+whisper-cli
+jarvis_bin
